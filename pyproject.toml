@@ -1,0 +1,37 @@
+[project]
+name = "aspark-insights"
+version = "0.1.0"
+description = "Analytics for the aSPARK family: versioned metric definitions, time series over snapshots, joins, dashboards."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Andreas Lottes" }]
+keywords = ["aspark", "metrics", "analytics", "dora", "traceability"]
+
+# aspark-graph is pinned EXACTLY, not ranged: the interim library adapter (ADR-1)
+# imports its internals directly, so any version bump — even a patch — could change
+# Graph.to_dict()'s shape or NodeType/EdgeType enums under us. The runtime pin-check
+# in ports/graph.py (importlib.metadata, never aspark_graph.__version__ — it's stale)
+# is the enforcement; this exact pin is what it's checked against.
+dependencies = [
+    "aspark-graph==0.7.0",
+]
+
+[project.scripts]
+insights = "aspark_insights.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aspark_insights"]
+
+[tool.uv.sources]
+aspark-graph = { path = "../aSPARK-graph" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

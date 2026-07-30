@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout aspark-insights
+        uses: actions/checkout@v4
+        with:
+          path: aSPARK-insights
+
+      # aspark-graph is a uv path dependency (pyproject.toml [tool.uv.sources]),
+      # checked out as a sibling directory so the interim library adapter has a
+      # real install to import — and so the real-install integration test
+      # (tests/test_graph_integration.py) runs rather than silently skipping.
+      - name: Checkout aspark-graph (sibling, path dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/aSPARK-graph
+          path: aSPARK-graph
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Verify lockfile has no drift
+        working-directory: aSPARK-insights
+        run: uv lock --check
+
+      - name: Sync dependencies
+        working-directory: aSPARK-insights
+        run: uv sync --extra dev
+
+      # Runs the full suite, including the determinism canary
+      # (test_determinism_canary.py), the boundary guard (test_boundary.py),
+      # and the real-install integration test (test_graph_integration.py).
+      - name: Run test suite
+        working-directory: aSPARK-insights
+        run: uv run pytest -v

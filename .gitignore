@@ -1,0 +1,17 @@
+# aspark-insights derived state (disposable, rebuildable)
+.aspark-insights/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+dist/
+
+# macOS
+.DS_Store
+
+# Local Claude Code session/tool state (not project source)
+.claude/

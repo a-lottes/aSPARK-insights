@@ -1,0 +1,22 @@
+{
+  "edges": [
+    {
+      "confidence": "extracted",
+      "source": "file:src/foo.py",
+      "target": "def:src/foo.py::bar",
+      "type": "contains"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "def:src/foo.py::bar",
+      "name": "bar",
+      "type": "Function"
+    },
+    {
+      "id": "file:src/foo.py",
+      "name": "foo.py",
+      "type": "File"
+    }
+  ]
+}
