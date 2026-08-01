@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from aspark_insights.model.fact import Fact, SubjectKind
-from aspark_insights.model.provenance import GraphSource, Provenance
+from aspark_insights.model.provenance import GraphSource, Provenance, ScopeFilterResult
 from aspark_insights.model.snapshot import Snapshot
 from aspark_insights.model.value import MetricValue
 
@@ -57,6 +57,8 @@ def _provenance(**overrides) -> Provenance:
         metric_registry_version="0.1.0",
         graph_source=GraphSource(access="library-interim", sealed=True),
         policy_versions=None,
+        scope_filter=ScopeFilterResult(patterns=(), excluded_count=0),
+        graph_staleness=None,
     )
     defaults.update(overrides)
     return Provenance(**defaults)
@@ -67,6 +69,14 @@ def test_provenance_requires_every_field_as_an_input():
     assert prov.as_of == "2026-07-29"
     assert prov.policy_versions is None
     assert prov.to_dict()["graph_source"] == {"access": "library-interim", "sealed": True}
+    assert prov.to_dict()["scope_filter"] == {"patterns": [], "excluded_count": 0}
+    assert prov.to_dict()["graph_staleness"] is None
+
+
+def test_metric_value_carries_its_own_n():
+    mv = MetricValue(metric_id="TRC-001", metric_version="1.0.0", value=0.5, n=4)
+    assert mv.n == 4
+    assert mv.to_dict()["n"] == 4
 
 
 def test_snapshot_seal_composes_and_serializes():

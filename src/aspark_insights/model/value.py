@@ -16,6 +16,7 @@ class MetricValue:
     metric_version: str
     value: float | int | None
     reason: str | None = None
+    n: int | None = None  # MTA-001: the denominator this value was computed over
 
     def __post_init__(self) -> None:
         if self.value is None and not self.reason:
@@ -35,4 +36,5 @@ class MetricValue:
             "metric_version": self.metric_version,
             "value": self.value,
             "reason": self.reason,
+            "n": self.n,
         }

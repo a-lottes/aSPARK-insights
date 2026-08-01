@@ -1,0 +1,108 @@
+{
+  "edges": [
+    {
+      "confidence": "declared",
+      "source": "feature:demo",
+      "target": "story:demo:US-1",
+      "type": "has_story"
+    },
+    {
+      "confidence": "declared",
+      "source": "feature:demo",
+      "target": "story:demo:US-2",
+      "type": "has_story"
+    },
+    {
+      "confidence": "declared",
+      "source": "feature:demo",
+      "target": "task:demo:T1",
+      "type": "has_task"
+    },
+    {
+      "confidence": "declared",
+      "source": "qa:demo:AC-1.1#0",
+      "target": "ac:demo:AC-1.1",
+      "type": "verifies"
+    },
+    {
+      "confidence": "declared",
+      "source": "story:demo:US-1",
+      "target": "ac:demo:AC-1.1",
+      "type": "has_ac"
+    },
+    {
+      "confidence": "declared",
+      "source": "story:demo:US-1",
+      "target": "ac:demo:AC-1.2",
+      "type": "has_ac"
+    },
+    {
+      "confidence": "declared",
+      "source": "task:demo:T1",
+      "target": "file:src/demo.py",
+      "type": "implements"
+    },
+    {
+      "confidence": "declared",
+      "source": "task:demo:T1",
+      "target": "story:demo:US-1",
+      "type": "maps_to"
+    }
+  ],
+  "nodes": [
+    {
+      "ac": "AC-1.1",
+      "feature": "demo",
+      "id": "ac:demo:AC-1.1",
+      "story": "story:demo:US-1",
+      "text": "does the thing",
+      "type": "AcceptanceCriterion"
+    },
+    {
+      "ac": "AC-1.2",
+      "feature": "demo",
+      "id": "ac:demo:AC-1.2",
+      "story": "story:demo:US-1",
+      "text": "unverified",
+      "type": "AcceptanceCriterion"
+    },
+    {
+      "id": "feature:demo",
+      "name": "demo",
+      "type": "Feature"
+    },
+    {
+      "id": "file:src/demo.py",
+      "name": "demo.py",
+      "type": "File"
+    },
+    {
+      "ac": "AC-1.1",
+      "feature": "demo",
+      "id": "qa:demo:AC-1.1#0",
+      "order": 0,
+      "result": "pass",
+      "type": "QACheck"
+    },
+    {
+      "feature": "demo",
+      "id": "story:demo:US-1",
+      "story": "US-1",
+      "title": "Mapped and verified",
+      "type": "Story"
+    },
+    {
+      "feature": "demo",
+      "id": "story:demo:US-2",
+      "story": "US-2",
+      "title": "Orphan story",
+      "type": "Story"
+    },
+    {
+      "feature": "demo",
+      "id": "task:demo:T1",
+      "task": "T1",
+      "type": "Task"
+    }
+  ]
+}

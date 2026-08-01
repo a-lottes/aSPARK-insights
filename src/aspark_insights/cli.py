@@ -30,7 +30,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_build = sub.add_parser("build", help="Build a snapshot from the graph.")
+    p_build = sub.add_parser(
+        "build",
+        help="Build a snapshot from the graph — metrics carries real TRC-*/MTA-* entries.",
+    )
     p_build.add_argument("--as-of", required=True, help="Date this snapshot represents, YYYY-MM-DD (an input, never the wall clock).")
     p_build.add_argument(
         "--repo", default=".",
@@ -43,7 +46,10 @@ def _build_parser() -> argparse.ArgumentParser:
              "Set this to avoid writing into a repo you're only analyzing.",
     )
 
-    p_query = sub.add_parser("query", help="Read back facts/provenance from the last snapshot.")
+    p_query = sub.add_parser(
+        "query",
+        help="Read back facts/metrics/provenance from the last snapshot.",
+    )
     p_query.add_argument("--repo", default=".", help="Repo root (default: .)")
     p_query.add_argument(
         "--output", default=None,
@@ -99,7 +105,12 @@ def _cmd_query(args: argparse.Namespace) -> int:
         raise InsightsError("no snapshot found; run `insights build` first", reason="no_snapshot")
     data = read_snapshot_dict(path)
     require_snapshot_shape(data, path)
-    print(canonical_json({"facts": data["facts"], "provenance": data["provenance"]}), end="")
+    print(
+        canonical_json(
+            {"facts": data["facts"], "metrics": data["metrics"], "provenance": data["provenance"]}
+        ),
+        end="",
+    )
     return 0
 
 

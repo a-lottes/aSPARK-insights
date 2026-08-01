@@ -24,9 +24,13 @@ def built_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_build_snapshot_seals_empty_metrics_with_provenance(built_repo: Path):
+def test_build_snapshot_seals_honest_metrics_with_provenance(built_repo: Path):
+    """The shared File/Function fixture has no Story/AC/Task nodes — every
+    registered metric honestly reports null+reason rather than a fabricated
+    number, per traceability-metrics' own zero-denominator rule."""
     snap = build_snapshot(built_repo, as_of="2026-07-29")
-    assert snap.metrics == ()
+    assert len(snap.metrics) >= 1
+    assert all(m.value is None and m.reason for m in snap.metrics)
     assert snap.provenance.as_of == "2026-07-29"
     assert snap.provenance.graph_source.access == "library-interim"
     assert snap.provenance.graph_source.sealed is True

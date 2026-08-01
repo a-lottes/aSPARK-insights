@@ -55,7 +55,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "aspark-insights"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "aspark-graph" },

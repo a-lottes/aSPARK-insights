@@ -53,9 +53,9 @@ def test_query_reads_back_raw_facts_and_provenance_from_last_snapshot(built_repo
     import json
 
     data = json.loads(query_result.stdout)
-    assert set(data.keys()) == {"facts", "provenance"}
+    assert set(data.keys()) == {"facts", "metrics", "provenance"}
     assert data["provenance"]["as_of"] == "2026-07-29"
-    assert data["facts"] == []
+    assert data["facts"] == []  # fixture has no Story/AC/Task nodes to collect
 
 
 def test_query_with_no_snapshot_exits_1_with_named_error(tmp_path: Path):

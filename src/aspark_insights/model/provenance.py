@@ -20,12 +20,29 @@ class GraphSource:
 
 
 @dataclass(frozen=True, slots=True)
+class ScopeFilterResult:
+    """Which exclusion patterns applied and how many nodes they dropped (MTA-003).
+
+    Always present in provenance, even when nothing was excluded — an absent
+    field would be indistinguishable from "filtering was never considered".
+    """
+
+    patterns: tuple[str, ...]
+    excluded_count: int
+
+    def to_dict(self) -> dict:
+        return {"patterns": list(self.patterns), "excluded_count": self.excluded_count}
+
+
+@dataclass(frozen=True, slots=True)
 class Provenance:
     as_of: str
     insights_version: str
     metric_registry_version: str
     graph_source: GraphSource
     policy_versions: dict | None
+    scope_filter: ScopeFilterResult
+    graph_staleness: dict | None  # MTA-002: the graph's own `staleness` result at build time
 
     def to_dict(self) -> dict:
         return {
@@ -34,4 +51,6 @@ class Provenance:
             "metric_registry_version": self.metric_registry_version,
             "graph_source": self.graph_source.to_dict(),
             "policy_versions": self.policy_versions,
+            "scope_filter": self.scope_filter.to_dict(),
+            "graph_staleness": self.graph_staleness,
         }

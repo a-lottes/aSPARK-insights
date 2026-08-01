@@ -1,4 +1,8 @@
-"""US-5: metric registry mechanism, shipping zero real metric definitions."""
+"""US-5: metric registry mechanism (foundation). Real TRC-*/MTA-* entries land
+
+via `metrics/traceability.py` (traceability-metrics, I2) — see test_traceability.py
+for those. This file tests the bare `MetricRegistry` mechanism in isolation.
+"""
 
 from __future__ import annotations
 
@@ -45,6 +49,11 @@ def test_registered_function_is_pure_and_invocable():
     assert result.value == 1
 
 
-def test_shipped_registry_is_empty():
-    """No real metric definitions ship with this feature — that's I2's job."""
-    assert registry.list() == []
+def test_shared_registry_registers_traceability_metrics_on_import():
+    """The module-level `registry` singleton is populated by importing
+    `metrics.traceability` — an explicit, grep-able `register()` call at import
+    time (see that module's docstring), not decorator magic."""
+    from aspark_insights.metrics import traceability  # noqa: F401
+
+    listing = registry.list()
+    assert {"metric_id": "TRC-001", "metric_version": "1.0.0"} in listing

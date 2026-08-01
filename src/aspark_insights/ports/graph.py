@@ -69,15 +69,25 @@ class LibraryInterimGraphPort:
             raise GraphNotBuiltError(f"graph not built: {path} does not exist")
         try:
             return Graph.load(path).to_dict()
-        except (json.JSONDecodeError, KeyError, ValueError, AttributeError, TypeError) as exc:
-            # A malformed/empty/wrong-shape graph.json is a realistic state
-            # (interrupted build, disk full, merge-conflict markers) — it must
-            # surface as a named error, not a raw traceback through Graph.load
-            # and the installed aspark_graph package's own json.loads (B2).
-            # AttributeError/TypeError cover valid-JSON-non-dict shapes: Graph.load
-            # calls `data.get(...)` internally, which raises AttributeError on a
-            # top-level list/str/null/number rather than KeyError or ValueError.
-            raise GraphUnreadableError(f"graph at {path} is malformed: {exc}") from exc
+        except json.JSONDecodeError as exc:
+            raise GraphUnreadableError(f"graph at {path} contains invalid JSON: {exc}") from exc
+        except KeyError as exc:
+            # A node/edge entry is missing a field Graph.load requires (e.g. "type").
+            # str(KeyError) is just the missing key repr ("'type'") — folded into a
+            # sentence so this doesn't read as a bare, unexplained Python exception.
+            raise GraphUnreadableError(
+                f"graph at {path} has an entry missing required field {exc}"
+            ) from exc
+        except (AttributeError, TypeError) as exc:
+            # Valid JSON that isn't the expected shape (a top-level list/str/null/
+            # number, or a node/edge that isn't a dict) — Graph.load's internal
+            # `data.get(...)` calls raise these rather than KeyError/ValueError.
+            raise GraphUnreadableError(
+                f"graph at {path} is not shaped like a graph document (expected an "
+                f"object with 'nodes' and 'edges' lists of objects): {exc}"
+            ) from exc
+        except ValueError as exc:
+            raise GraphUnreadableError(f"graph at {path} contains invalid data: {exc}") from exc
 
     def query(self, name: str, *args: str, repo_root: str | Path = ".") -> dict:
         raise NotImplementedError(

@@ -46,3 +46,28 @@ def test_guard_catches_a_hyphen_form_bypass(tmp_path: Path):
     )
     offenders = _find_offenders(src_dir, allowed=set())
     assert offenders == [str(Path("src") / "pkg" / "sneaky.py")]
+
+
+def test_new_metrics_files_are_within_the_guards_scan_scope():
+    """metrics/collectors.py, scope.py and traceability.py (traceability-metrics,
+    I2) must be files the guard actually scans, not silently excluded — proves
+    T7's boundary check covers this feature's new files, not just I1's."""
+    scanned = {p for p in SRC_DIR.rglob("*.py")}
+    for name in ("collectors.py", "scope.py", "traceability.py"):
+        path = SRC_DIR / "metrics" / name
+        assert path in scanned
+        assert path not in ALLOWED
+
+
+def test_a_planted_violation_in_a_new_metrics_file_is_caught(tmp_path: Path):
+    """Copies collectors.py's real content into a same-named tmp file and
+    injects a direct aspark_graph import — proves the guard would fail the
+    build if this specific file ever regressed, not just a synthetic stand-in."""
+    src_dir = tmp_path / "src" / "aspark_insights" / "metrics"
+    src_dir.mkdir(parents=True)
+    real = (SRC_DIR / "metrics" / "collectors.py").read_text(encoding="utf-8")
+    (src_dir / "collectors.py").write_text(
+        real + "\nimport aspark_graph  # a planted regression\n", encoding="utf-8"
+    )
+    offenders = _find_offenders(src_dir.parent, allowed=set())
+    assert offenders == [str(Path("src") / "aspark_insights" / "metrics" / "collectors.py")]

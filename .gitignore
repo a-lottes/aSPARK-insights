@@ -1,6 +1,9 @@
 # aspark-insights derived state (disposable, rebuildable)
 .aspark-insights/
 
+# aspark-graph read model for this repo's own self-analysis (disposable, rebuildable)
+.aspark-graph/
+
 # Python
 __pycache__/
 *.py[cod]
