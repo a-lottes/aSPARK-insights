@@ -1,7 +1,8 @@
 # aspark-insights — project conventions
 
-Patterns and process nudges kept from the `foundation` (I1) cycle. Read
-`.spark/foundation/release.md` §6 for the full story behind each of these.
+Patterns and process nudges kept from the `foundation` (I1) and
+`traceability-metrics` (I2) cycles. Read `.spark/foundation/release.md` §6 and
+`.spark/traceability-metrics/release.md` §6 for the full story behind each.
 
 ## Code patterns
 
@@ -29,6 +30,24 @@ Patterns and process nudges kept from the `foundation` (I1) cycle. Read
   from `query`/`verify`'s need to fail loudly. Don't over-generalize a fix
   onto callers that never asked for it.
 
+- **A metric with more than one denominator ships as multiple immutable
+  registry entries, never as one dict-valued `MetricValue.value`.** TRC-004
+  (orphan-tasks vs. unverified-acs) and TRC-005 (declared/extracted/inferred
+  shares) both hit this: `MetricValue.value` is deliberately a scalar
+  (`float | int | None`), so a metric that's really "N related numbers" ships
+  as N separately versioned `(id, version)` entries — e.g. `TRC-005-declared`,
+  `TRC-005-extracted`, `TRC-005-inferred` — each with its own `n`. Keep this as
+  the house style rather than re-litigating the shape per future multi-part
+  metric.
+
+- **Prefer disclosing a new risk through an existing provenance field over
+  inventing a bespoke new one.** The A3 risk (this family's current
+  `review.md`/`qa.md` filenames aren't recognized by the installed
+  `aspark-graph`'s artifact parser, which expects legacy names) is disclosed
+  via the existing `graph_source`/staleness provenance rather than a new
+  "parser coverage" flag — one more application of "don't recompute what the
+  graph already answers," extended to disclosure, not just computation.
+
 ## Process nudges for future increments
 
 - **Apply a hostile-input checklist at `/increment` time for any CLI argument
@@ -46,7 +65,10 @@ Patterns and process nudges kept from the `foundation` (I1) cycle. Read
   first `/go-live` pass**, not at the release ceremony itself. This project's
   first commit had to work around a completely unconfigured identity via
   env-var-scoped `GIT_AUTHOR_*`/`GIT_COMMITTER_*` variables, per the standing
-  "never touch git config" rule — avoidable with an earlier heads-up.
+  "never touch git config" rule — avoidable with an earlier heads-up. **Still
+  unconfigured as of the I2 release** (the second cycle running) despite this
+  same nudge — writing it down once isn't self-enforcing; treat it as a real
+  action item, not a note to re-read.
 
 - **Never mock the sibling `aspark-graph` dependency in integration tests.**
   The decision to require a real, pinned, installed sibling repo for
@@ -54,3 +76,15 @@ Patterns and process nudges kept from the `foundation` (I1) cycle. Read
   QA later surface a real malformed-`graph.json` traceback bug — a mock
   would have hidden it. Keep this precedent for any future family-repo
   integration.
+
+- **When a plan names a specific external repo as a dogfood/integration
+  target, verify that target is actually in the state the plan assumes
+  (e.g. "has a built graph") at the *start* of the phase that depends on
+  it — not as a reactive discovery mid-`/demo-day`.** I2's spec assumption
+  A1 claimed both `aspark-graph` and `aspark-policy` had (or would trivially
+  get) a built graph; in practice `aspark-policy`'s never built at all,
+  and QA only found out by trying. The underlying cause (a real
+  `TemplateDriftError` in that repo's own `.spark/format-json-schema/spec.md`
+  — a heading shaped `### US-6 — dropped (...)`  the graph parser can't
+  read) is out of scope to fix here, but the earlier the assumption is
+  checked, the cheaper the surprise.
