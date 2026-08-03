@@ -1,8 +1,9 @@
 # aspark-insights — project conventions
 
-Patterns and process nudges kept from the `foundation` (I1) and
-`traceability-metrics` (I2) cycles. Read `.spark/foundation/release.md` §6 and
-`.spark/traceability-metrics/release.md` §6 for the full story behind each.
+Patterns and process nudges kept from the `foundation` (I1),
+`traceability-metrics` (I2), and `public-repo-polish` cycles. Read
+`.spark/foundation/release.md` §6, `.spark/traceability-metrics/release.md` §6,
+and `.spark/public-repo-polish/release.md` §6 for the full story behind each.
 
 ## Code patterns
 
@@ -60,15 +61,13 @@ Patterns and process nudges kept from the `foundation` (I1) and
   original task DoDs) — cheaper to check for this class of bug during
   `/increment` than to find it during `/demo-day`.
 
-- **For a from-scratch, not-yet-`git init`-ed repo, confirm the local git
-  commit identity (`user.name`/`user.email`) is configured *before* the
-  first `/go-live` pass**, not at the release ceremony itself. This project's
-  first commit had to work around a completely unconfigured identity via
-  env-var-scoped `GIT_AUTHOR_*`/`GIT_COMMITTER_*` variables, per the standing
-  "never touch git config" rule — avoidable with an earlier heads-up. **Still
-  unconfigured as of the I2 release** (the second cycle running) despite this
-  same nudge — writing it down once isn't self-enforcing; treat it as a real
-  action item, not a note to re-read.
+- **Git identity is now configured** (`git config --global user.name`/
+  `user.email`, set during `public-repo-polish`'s `/go-live`, with the user's
+  explicit authorization) — this took two full release cycles of being
+  flagged in a report before it was actually fixed. The lesson: a repeated
+  note in a release report doesn't self-enforce; when something is flagged
+  twice with no remediation, ask the question directly in the moment rather
+  than writing it down a third time.
 
 - **Never mock the sibling `aspark-graph` dependency in integration tests.**
   The decision to require a real, pinned, installed sibling repo for
@@ -88,3 +87,25 @@ Patterns and process nudges kept from the `foundation` (I1) and
   — a heading shaped `### US-6 — dropped (...)`  the graph parser can't
   read) is out of scope to fix here, but the earlier the assumption is
   checked, the cheaper the surprise.
+
+- **For any documentation-heavy feature (a README rewrite, family-facing
+  docs), render the Markdown through GitHub's real `/markdown` API
+  (`gh api /markdown`, `mode=gfm`) and inspect the resulting HTML in a
+  browser before `/go-live`**, rather than trusting the raw source read.
+  `public-repo-polish`'s QA pass did this and caught things a source read
+  never would have proven (real checkbox rendering, real link resolution,
+  real table formatting) — the first genuine visual-surface QA in this
+  project. Keep this as the house technique for any future docs feature.
+
+- **A version bump is a claim about package behavior, not a ceremony
+  checkbox.** `public-repo-polish` was documentation/config-only (README,
+  LICENSE, `.gitignore`) with zero `src/`/`tests/` change — it shipped with
+  **no version bump**, deliberately, so "the version changed" keeps meaning
+  "the package's behavior changed" for every future release. Don't bump a
+  version by default just because a `/go-live` happened.
+
+- **When a family of sibling repos shares a README convention (section
+  order, status framing, family-position table), treat matching it as a
+  checked acceptance criterion**, not an afterthought — `public-repo-polish`
+  scoped this explicitly (US-5) rather than leaving family consistency to
+  chance. Keep this precedent for any future family-repo public-facing doc.
