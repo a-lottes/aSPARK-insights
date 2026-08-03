@@ -1,6 +1,6 @@
 [project]
 name = "aspark-insights"
-version = "0.2.0"
+version = "0.3.0"
 description = "Analytics for the aSPARK family: versioned metric definitions, time series over snapshots, joins, dashboards."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,8 +13,14 @@ keywords = ["aspark", "metrics", "analytics", "dora", "traceability"]
 # Graph.to_dict()'s shape or NodeType/EdgeType enums under us. The runtime pin-check
 # in ports/graph.py (importlib.metadata, never aspark_graph.__version__ — it's stale)
 # is the enforcement; this exact pin is what it's checked against.
+# `mcp` is capped `<1.20` for the same reason aspark-graph caps it (see its
+# pyproject.toml): 1.20 hard-pulls `cryptography` for server-side OAuth this
+# server has no code path for, and that dep has no macOS x86_64 wheel. `>=1.12`
+# is the floor exposing `mcp.server.fastmcp.FastMCP` + `@mcp.tool()`. Declared
+# directly rather than relying on the aspark-graph path dep's transitive copy.
 dependencies = [
     "aspark-graph==0.7.0",
+    "mcp>=1.12,<1.20",
 ]
 
 [project.scripts]

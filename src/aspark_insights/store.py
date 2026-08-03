@@ -49,7 +49,11 @@ REQUIRED_SNAPSHOT_KEYS = ("facts", "metrics", "provenance")
 def require_snapshot_shape(data: dict, path: str | Path) -> None:
     """A file can be valid JSON and still not be a snapshot — callers that index
     `data` directly (query, verify) must check this first, or a wrong-shape file
-    raises a raw `KeyError` instead of the named error NFR-3 requires."""
+    raises a raw `KeyError`/`TypeError` instead of the named error NFR-3 requires."""
+    if not isinstance(data, dict):
+        raise SnapshotUnreadableError(
+            f"snapshot at {path} is not a JSON object (got {type(data).__name__})"
+        )
     missing = [key for key in REQUIRED_SNAPSHOT_KEYS if key not in data]
     if missing:
         raise SnapshotUnreadableError(

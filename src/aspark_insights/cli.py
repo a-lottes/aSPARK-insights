@@ -14,9 +14,9 @@ from pathlib import Path
 
 from aspark_insights.build import build_snapshot
 from aspark_insights.errors import GraphNotBuiltError, InsightsError, NotImplementedStub, VerifyMismatchError
+from aspark_insights.query import run_query
 from aspark_insights.serialization import canonical_json
 from aspark_insights.store import (
-    latest_snapshot_path,
     read_snapshot_dict,
     require_snapshot_shape,
     write_snapshot,
@@ -57,6 +57,21 @@ def _build_parser() -> argparse.ArgumentParser:
              "used at build time, if any.",
     )
 
+    p_serve = sub.add_parser(
+        "serve",
+        help="Run a read-only MCP stdio server exposing the `query` tool.",
+    )
+    p_serve.add_argument(
+        "--repo", default=".",
+        help="Repo root the snapshot was built for (default: .). Fixed for the "
+             "server's entire process lifetime — never a per-call argument.",
+    )
+    p_serve.add_argument(
+        "--output", default=None,
+        help="Where the snapshot was written (default: --repo). Must match the "
+             "--output used at build time, if any. Fixed at launch, same as --repo.",
+    )
+
     sub.add_parser("render", help="Render a dashboard (not yet implemented).")
 
     p_diff = sub.add_parser("diff", help="Diff two snapshots.")
@@ -79,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_build(args)
         if args.command == "query":
             return _cmd_query(args)
+        if args.command == "serve":
+            return _cmd_serve(args)
         if args.command == "render":
             return _cmd_render(args)
         if args.command == "diff":
@@ -100,17 +117,15 @@ def _cmd_build(args: argparse.Namespace) -> int:
 
 
 def _cmd_query(args: argparse.Namespace) -> int:
-    path = latest_snapshot_path(args.output or args.repo)
-    if path is None:
-        raise InsightsError("no snapshot found; run `insights build` first", reason="no_snapshot")
-    data = read_snapshot_dict(path)
-    require_snapshot_shape(data, path)
-    print(
-        canonical_json(
-            {"facts": data["facts"], "metrics": data["metrics"], "provenance": data["provenance"]}
-        ),
-        end="",
-    )
+    result = run_query(args.output or args.repo)
+    print(canonical_json(result), end="")
+    return 0
+
+
+def _cmd_serve(args: argparse.Namespace) -> int:
+    from aspark_insights.server import run
+
+    run(args.output or args.repo)
     return 0
 
 

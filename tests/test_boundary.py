@@ -71,3 +71,50 @@ def test_a_planted_violation_in_a_new_metrics_file_is_caught(tmp_path: Path):
     )
     offenders = _find_offenders(src_dir.parent, allowed=set())
     assert offenders == [str(Path("src") / "aspark_insights" / "metrics" / "collectors.py")]
+
+
+# --- T4 (mcp-server, AC-1.5/NFR-2): the MCP read path never reaches the
+# computation path (`build_snapshot`/`GraphPort`), checked the same
+# planted-regression way as the aspark_graph guard above. -------------------
+
+_COMPUTE_PATH_PATTERNS = [
+    re.compile(r"\bbuild_snapshot\b"),
+    re.compile(r"^from aspark_insights\.build import", re.MULTILINE),
+    re.compile(r"^from aspark_insights import build\b", re.MULTILINE),
+    re.compile(r"\bGraphPort\b"),
+]
+
+_MCP_READ_FILES = [SRC_DIR / "server.py", SRC_DIR / "query.py"]
+
+
+def _find_compute_offenders(paths: list[Path], relative_to: Path) -> list[str]:
+    offenders = []
+    for path in paths:
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if any(p.search(text) for p in _COMPUTE_PATH_PATTERNS):
+            offenders.append(str(path.relative_to(relative_to)))
+    return offenders
+
+
+def test_mcp_read_path_never_imports_the_compute_path():
+    offenders = _find_compute_offenders(_MCP_READ_FILES, relative_to=SRC_DIR.parent.parent)
+    assert not offenders, (
+        f"server.py/query.py must never reach build_snapshot/GraphPort (AC-1.5, NFR-2): {offenders}"
+    )
+
+
+def test_guard_catches_a_planted_compute_import_in_server_py(tmp_path: Path):
+    """Proves the guard would fail the build on a future 'convenience' import
+    re-coupling the MCP read path to the computation path, not just that none
+    exists today."""
+    real = (SRC_DIR / "server.py").read_text(encoding="utf-8")
+    planted_dir = tmp_path / "planted"
+    planted_dir.mkdir()
+    (planted_dir / "server.py").write_text(
+        real + "\nfrom aspark_insights.build import build_snapshot  # a planted regression\n",
+        encoding="utf-8",
+    )
+    offenders = _find_compute_offenders([planted_dir / "server.py"], relative_to=planted_dir)
+    assert offenders == ["server.py"]

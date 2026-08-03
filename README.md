@@ -81,6 +81,17 @@ target repo — it never builds one itself. Every metric reports a real value
 with its sample size, or an honest `null` with a reason (e.g. `"no Story nodes
 found in graph"`) when there's nothing to measure yet.
 
+### MCP
+
+`insights serve` runs a **read-only** stdio MCP server exposing one tool,
+`query`, name-matched to the CLI subcommand it wraps:
+
+```bash
+uv run insights serve --repo ../aSPARK-graph --output /tmp/insights-scratch
+```
+
+The repo/output location is fixed once at launch — `query` takes **no arguments**, so it can never be pointed anywhere else per call, and it never triggers a fresh `build`. See [SECURITY.md](SECURITY.md) for the trust boundary and non-guarantees.
+
 ## Project Status
 
 - [x] Package skeleton, `GraphPort` seam to `aspark-graph`, core Fact/Snapshot/
@@ -95,7 +106,7 @@ found in graph"`) when there's nothing to measure yet.
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene
 - [ ] Policy-derived compliance metrics — blocked on `aspark-policy` shipping
       an enforcement engine
-- [ ] MCP server (read-only, namesake to the CLI)
+- [x] MCP server — read-only `query` tool, namesake to the CLI
 
 ## Position in the Product Family
 
