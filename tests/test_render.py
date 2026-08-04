@@ -1,0 +1,490 @@
+"""snapshot-report: `insights render` writes one self-contained, offline HTML
+report of the latest snapshot (US-1..US-5). Task references are to
+.spark/snapshot-report/plan.md's T1..T7.
+"""
+
+from __future__ import annotations
+
+import inspect
+import json
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from aspark_insights.build import build_snapshot
+from aspark_insights.errors import InsightsError
+from aspark_insights.render import REPORT_FILENAME, render_html, run_render
+from aspark_insights.store import STORE_DIRNAME, write_snapshot
+
+FIXTURE_GRAPH = Path(__file__).parent / "fixtures" / "graph.json"
+
+_EXTERNAL_REF_PATTERN = re.compile(r'(https?://|<link\b|<script\b[^>]*\bsrc=)', re.IGNORECASE)
+
+
+@pytest.fixture
+def built_repo(tmp_path: Path) -> Path:
+    graph_dir = tmp_path / ".aspark-graph"
+    graph_dir.mkdir()
+    shutil.copyfile(FIXTURE_GRAPH, graph_dir / "graph.json")
+    return tmp_path
+
+
+def _run_cli(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "-m", "aspark_insights.cli", *args],
+        capture_output=True,
+        text=True,
+        cwd=repo,
+    )
+
+
+# --- T1: walking skeleton ----------------------------------------------------
+
+
+def test_render_html_is_pure_no_io_no_clock_no_random():
+    sig = inspect.signature(render_html)
+    assert list(sig.parameters) == ["snapshot"]
+
+
+def test_render_html_has_viewport_meta_so_mobile_width_actually_applies():
+    """NFR-7: without this, mobile browsers render at a fixed ~980px virtual
+    viewport regardless of device width, defeating the 375px requirement
+    entirely — caught by actually rendering the page in a browser, not just
+    reading the CSS."""
+    text = render_html(_snapshot())
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in text
+
+
+def test_render_html_skeleton_has_doctype_one_h1_embedded_style_no_external_refs():
+    snapshot = {"facts": [], "metrics": [], "provenance": {
+        "as_of": "2026-08-04", "insights_version": "0.3.0", "metric_registry_version": "0.1.0",
+        "graph_source": {"access": "library-interim", "sealed": True}, "policy_versions": None,
+        "scope_filter": {"patterns": [], "excluded_count": 0}, "graph_staleness": None,
+    }}
+    text = render_html(snapshot)
+    assert text.startswith("<!DOCTYPE html>")
+    assert text.count("<h1") == 1
+    assert "<style>" in text
+    assert not _EXTERNAL_REF_PATTERN.search(text)
+
+
+def test_run_render_writes_report_and_returns_resolved_absolute_path(built_repo: Path):
+    snapshot = build_snapshot(built_repo, as_of="2026-07-29")
+    write_snapshot(built_repo, snapshot)
+
+    path = run_render(str(built_repo))
+
+    assert path.is_absolute()
+    assert path == path.resolve()
+    assert path.name == REPORT_FILENAME
+    assert path.parent.name == STORE_DIRNAME
+    assert path.exists()
+    assert path.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+
+
+def test_run_render_overwrites_existing_report(built_repo: Path):
+    snapshot = build_snapshot(built_repo, as_of="2026-07-29")
+    write_snapshot(built_repo, snapshot)
+    report_path = built_repo / STORE_DIRNAME / REPORT_FILENAME
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("stale content", encoding="utf-8")
+
+    run_render(str(built_repo))
+
+    assert "stale content" not in report_path.read_text(encoding="utf-8")
+
+
+def test_cli_render_prints_report_confirmation_json_and_exits_0(built_repo: Path):
+    build_result = _run_cli(built_repo, "build", "--as-of", "2026-07-29")
+    assert build_result.returncode == 0, build_result.stderr
+
+    result = _run_cli(built_repo, "render")
+    assert result.returncode == 0, result.stderr
+
+    data = json.loads(result.stdout)
+    assert set(data.keys()) == {"report"}
+    assert Path(data["report"]).is_absolute()
+    assert Path(data["report"]).exists()
+
+
+def test_render_help_documents_real_behavior_not_not_implemented(tmp_path: Path):
+    result = _run_cli(tmp_path, "render", "--help")
+    assert result.returncode == 0
+    assert "not yet implemented" not in result.stdout.lower()
+    assert "--repo" in result.stdout
+    assert "--output" in result.stdout
+
+
+# --- T2: no snapshot / unreadable -> reuse query's named errors --------------
+
+
+def test_render_with_no_snapshot_exits_1_with_named_error(tmp_path: Path):
+    result = _run_cli(tmp_path, "render")
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "no_snapshot" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_render_on_corrupt_snapshot_exits_1_with_named_error_not_a_traceback(tmp_path: Path):
+    snapshots_dir = tmp_path / STORE_DIRNAME / "snapshots"
+    snapshots_dir.mkdir(parents=True)
+    (snapshots_dir / "2026-07-29.json").write_text("{not valid json", encoding="utf-8")
+
+    result = _run_cli(tmp_path, "render")
+    assert result.returncode == 1
+    assert "snapshot_unreadable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_render_on_wrong_shape_json_exits_1_with_named_error(tmp_path: Path):
+    snapshots_dir = tmp_path / STORE_DIRNAME / "snapshots"
+    snapshots_dir.mkdir(parents=True)
+    (snapshots_dir / "2026-07-29.json").write_text("{}", encoding="utf-8")
+
+    result = _run_cli(tmp_path, "render")
+    assert result.returncode == 1
+    assert "snapshot_unreadable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_run_render_raises_insights_error_not_a_generic_exception(tmp_path: Path):
+    with pytest.raises(InsightsError):
+        run_render(str(tmp_path))
+
+
+# --- F1 (review fix): a wrong-sub-shape snapshot never raises a raw traceback -
+
+
+def _write_snapshot_json(tmp_path: Path, snapshot: dict) -> None:
+    snapshots_dir = tmp_path / STORE_DIRNAME / "snapshots"
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
+    (snapshots_dir / "2026-08-04.json").write_text(json.dumps(snapshot), encoding="utf-8")
+
+
+def test_metric_missing_value_field_raises_snapshot_unreadable_not_a_crash(tmp_path: Path):
+    """The exact repro found in /peer-review: a metric dict present but missing
+    value/reason/n crashed render_html with a raw KeyError before the fix."""
+    _write_snapshot_json(tmp_path, {
+        "facts": [], "metrics": [{"metric_id": "M1", "metric_version": "1.0.0"}],
+        "provenance": {"as_of": "2026-08-04"},
+    })
+    with pytest.raises(InsightsError) as exc_info:
+        run_render(str(tmp_path))
+    assert exc_info.value.reason == "snapshot_unreadable"
+
+
+def test_fact_missing_subject_kind_field_raises_snapshot_unreadable_not_a_crash(tmp_path: Path):
+    _write_snapshot_json(tmp_path, {
+        "facts": [{"subject_id": "x", "predicate": "p", "value": 1}], "metrics": [],
+        "provenance": {"as_of": "2026-08-04"},
+    })
+    with pytest.raises(InsightsError) as exc_info:
+        run_render(str(tmp_path))
+    assert exc_info.value.reason == "snapshot_unreadable"
+
+
+def test_facts_not_a_list_raises_snapshot_unreadable_not_a_crash(tmp_path: Path):
+    _write_snapshot_json(tmp_path, {
+        "facts": "not-a-list", "metrics": [],
+        "provenance": {"as_of": "2026-08-04"},
+    })
+    with pytest.raises(InsightsError) as exc_info:
+        run_render(str(tmp_path))
+    assert exc_info.value.reason == "snapshot_unreadable"
+
+
+def test_wrong_sub_shape_via_real_cli_exits_1_with_named_error_not_a_traceback(tmp_path: Path):
+    _write_snapshot_json(tmp_path, {
+        "facts": [], "metrics": [{"metric_id": "M1", "metric_version": "1.0.0"}],
+        "provenance": {"as_of": "2026-08-04"},
+    })
+    result = _run_cli(tmp_path, "render")
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "snapshot_unreadable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+# --- T3: data tables — canonical sort, nothing dropped, semantic markup -----
+
+
+def _snapshot(facts=None, metrics=None, provenance=None) -> dict:
+    return {
+        "facts": facts or [],
+        "metrics": metrics or [],
+        "provenance": provenance or {
+            "as_of": "2026-08-04", "insights_version": "0.3.0", "metric_registry_version": "0.1.0",
+            "graph_source": {"access": "library-interim", "sealed": True}, "policy_versions": None,
+            "scope_filter": {"patterns": [], "excluded_count": 0}, "graph_staleness": None,
+        },
+    }
+
+
+def test_facts_table_sorted_by_subject_kind_subject_id_predicate():
+    facts = [
+        {"subject_kind": "feature", "subject_id": "z", "predicate": "p", "value": 1},
+        {"subject_kind": "code_artifact", "subject_id": "a", "predicate": "p", "value": 2},
+        {"subject_kind": "code_artifact", "subject_id": "a", "predicate": "a-earlier", "value": 3},
+    ]
+    text = render_html(_snapshot(facts=facts))
+    positions = [text.index(f'>{v}<') for v in ("3", "2", "1")]
+    assert positions == sorted(positions)
+
+
+def test_metrics_table_sorted_by_metric_id_then_version():
+    metrics = [
+        {"metric_id": "TRC-002", "metric_version": "1.0.0", "value": 1, "reason": None, "n": 5},
+        {"metric_id": "TRC-001", "metric_version": "2.0.0", "value": 2, "reason": None, "n": 5},
+        {"metric_id": "TRC-001", "metric_version": "1.0.0", "value": 3, "reason": None, "n": 5},
+    ]
+    text = render_html(_snapshot(metrics=metrics))
+    pos_trc001_v1 = text.index("TRC-001</td><td>1.0.0")
+    pos_trc001_v2 = text.index("TRC-001</td><td>2.0.0")
+    pos_trc002 = text.index("TRC-002")
+    assert pos_trc001_v1 < pos_trc001_v2 < pos_trc002
+
+
+def test_all_facts_and_metrics_rows_present_none_dropped():
+    facts = [
+        {"subject_kind": "code_artifact", "subject_id": f"id-{i}", "predicate": "p", "value": i}
+        for i in range(12)
+    ]
+    metrics = [
+        {"metric_id": f"M-{i}", "metric_version": "1.0.0", "value": i, "reason": None, "n": 5}
+        for i in range(12)
+    ]
+    text = render_html(_snapshot(facts=facts, metrics=metrics))
+    for i in range(12):
+        assert f"id-{i}" in text
+        assert f"M-{i}" in text
+
+
+def test_tables_have_scope_col_headers_and_captions():
+    text = render_html(_snapshot(
+        facts=[{"subject_kind": "code_artifact", "subject_id": "a", "predicate": "p", "value": 1}],
+    ))
+    assert text.count('<th scope="col">') >= 2
+    assert "<caption>Metrics</caption>" in text
+    assert "<caption>Facts</caption>" in text
+
+
+# --- T4: provenance verbatim, section order, two-place stale cue -----------
+
+
+_STALE_PROVENANCE = {
+    "as_of": "2026-08-04", "insights_version": "0.3.0", "metric_registry_version": "0.1.0",
+    "graph_source": {"access": "library-interim", "sealed": True}, "policy_versions": None,
+    "scope_filter": {"patterns": [".claude/worktrees/**"], "excluded_count": 3},
+    "graph_staleness": {
+        "available": True, "stale": True, "files_checked": 40,
+        "changed": ["src/a.py"], "missing": [], "advice": "Run 'aspark-graph build' to refresh.",
+    },
+}
+
+
+def test_provenance_rendered_verbatim():
+    text = render_html(_snapshot(provenance=_STALE_PROVENANCE))
+    assert "2026-08-04" in text
+    assert "0.3.0" in text
+    assert "0.1.0" in text
+    assert "library-interim" in text
+    assert ".claude/worktrees/**" in text
+    assert "40" in text
+    assert "src/a.py" in text
+    assert "Run &#x27;aspark-graph build&#x27; to refresh." in text  # html.escape(quote=True)
+
+
+def test_section_order_provenance_then_metrics_then_facts():
+    text = render_html(_snapshot(
+        facts=[{"subject_kind": "code_artifact", "subject_id": "a", "predicate": "p", "value": 1}],
+        metrics=[{"metric_id": "M", "metric_version": "1", "value": 1, "reason": None, "n": 1}],
+    ))
+    pos_h1 = text.index("<h1")
+    pos_provenance = text.index('id="provenance"')
+    pos_metrics = text.index('id="metrics"')
+    pos_facts = text.index('id="facts"')
+    assert pos_h1 < pos_provenance < pos_metrics < pos_facts
+
+
+def test_stale_cue_appears_in_two_places_when_stale():
+    text = render_html(_snapshot(provenance=_STALE_PROVENANCE))
+    assert text.count("STALE") == 2
+    pos_h1 = text.index("<h1")
+    pos_provenance = text.index('id="provenance"')
+    first_stale = text.index("STALE")
+    second_stale = text.index("STALE", first_stale + 1)
+    assert pos_h1 < first_stale < pos_provenance < second_stale
+
+
+def test_no_stale_cue_when_not_stale():
+    text = render_html(_snapshot())  # default provenance has graph_staleness: None
+    assert "STALE" not in text
+
+
+def test_no_stale_cue_when_stale_is_false():
+    provenance = dict(_STALE_PROVENANCE)
+    provenance["graph_staleness"] = {**_STALE_PROVENANCE["graph_staleness"], "stale": False}
+    text = render_html(_snapshot(provenance=provenance))
+    assert "STALE" not in text
+
+
+def test_h2_headings_present_for_provenance_metrics_facts():
+    text = render_html(_snapshot())
+    assert "<h2>Provenance</h2>" in text
+    assert "<h2>Metrics</h2>" in text
+    assert "<h2>Facts</h2>" in text
+
+
+# --- T5: honest values — n beside value, distinctly-shaped null, empty state -
+
+
+def test_computed_value_shows_value_together_with_n():
+    metrics = [{"metric_id": "TRC-003", "metric_version": "1.0.0", "value": 0.875, "reason": None, "n": 8}]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "0.875" in text
+    assert "(n=8)" in text
+    # both appear in the same cell, not split across unrelated columns
+    assert "0.875 (n=8)" in text
+
+
+def test_computed_value_with_n_none_never_shows_a_bare_value():
+    """F2: the model permits value != None with n == None; never a bare value
+    with no n-related marker at all, even in this theoretical case."""
+    metrics = [{"metric_id": "M", "metric_version": "1.0.0", "value": 42, "reason": None, "n": None}]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "42 (n unavailable)" in text
+    assert "<td>42</td>" not in text  # never a bare value cell
+
+
+def test_null_value_shows_reason_with_distinct_shape_not_blank():
+    metrics = [{"metric_id": "TRC-002", "metric_version": "1.0.0", "value": None, "reason": "no Story nodes found in graph", "n": None}]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "no Story nodes found in graph" in text
+    assert 'class="null-value"' in text
+    assert "Not computed:" in text
+    assert "<td></td>" not in text  # never a blank cell
+
+
+def test_all_null_dogfood_snapshot_shows_real_reasons_and_facts_empty_notice(built_repo: Path):
+    """AC-3.3: the exact fixture-driven all-null case, built via build_snapshot,
+    not invented data — the realistic first-run screen."""
+    import html as _html
+
+    snapshot = build_snapshot(built_repo, as_of="2026-07-29")
+    text = render_html(snapshot.to_dict())
+    assert all(m.value is None for m in snapshot.metrics)
+    for m in snapshot.metrics:
+        assert _html.escape(m.reason, quote=True) in text
+    assert "No facts recorded for this snapshot." in text
+    assert 'class="empty-notice"' in text
+    assert "<table>" not in text.split('id="facts"')[1].split("</section>")[0]
+
+
+# --- T6: at-a-glance summary as distinct figures, under <h1> ----------------
+
+
+def test_summary_appears_directly_under_h1_as_distinct_figures_not_prose():
+    facts = [{"subject_kind": "code_artifact", "subject_id": "a", "predicate": "p", "value": 1}]
+    metrics = [
+        {"metric_id": "M1", "metric_version": "1", "value": 1, "reason": None, "n": 1},
+        {"metric_id": "M2", "metric_version": "1", "value": None, "reason": "no data", "n": None},
+    ]
+    text = render_html(_snapshot(facts=facts, metrics=metrics))
+    pos_h1 = text.index("<h1")
+    pos_summary = text.index('class="summary"')
+    pos_provenance = text.index('id="provenance"')
+    assert pos_h1 < pos_summary < pos_provenance
+    # distinct figures (a list of label:value items), not one dense sentence
+    assert text.count("<li>") >= 4
+
+
+def test_summary_counts_match_rendered_table_row_counts():
+    facts = [
+        {"subject_kind": "code_artifact", "subject_id": f"id-{i}", "predicate": "p", "value": i}
+        for i in range(3)
+    ]
+    metrics = [
+        {"metric_id": "M1", "metric_version": "1", "value": 1, "reason": None, "n": 1},
+        {"metric_id": "M2", "metric_version": "1", "value": None, "reason": "no data", "n": None},
+        {"metric_id": "M3", "metric_version": "1", "value": None, "reason": "no data", "n": None},
+    ]
+    text = render_html(_snapshot(facts=facts, metrics=metrics))
+    assert "<li><strong>Facts:</strong> 3</li>" in text
+    assert "<li><strong>Metrics:</strong> 3</li>" in text
+    assert "<li><strong>Computed:</strong> 1</li>" in text
+    assert "<li><strong>Null:</strong> 2</li>" in text
+    metrics_section = text.split('id="metrics"')[1].split("</section>")[0]
+    facts_section = text.split('id="facts"')[1].split("</section>")[0]
+    assert metrics_section.count("<tbody>") == 1
+    assert metrics_section.count("<tr>") == 1 + 3  # thead + 3 metric rows
+    assert facts_section.count("<tr>") == 1 + 3  # thead + 3 fact rows
+
+
+# --- T7: XSS hardening + byte-identical determinism -------------------------
+
+
+_HOSTILE = '<script>alert(1)</script>'
+
+
+def test_hostile_subject_id_is_escaped_never_raw_in_output():
+    facts = [{"subject_kind": "code_artifact", "subject_id": _HOSTILE, "predicate": "p", "value": "v"}]
+    text = render_html(_snapshot(facts=facts))
+    assert "<script>alert(1)</script>" not in text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in text
+
+
+def test_hostile_metric_reason_is_escaped():
+    metrics = [{"metric_id": "M", "metric_version": "1", "value": None, "reason": _HOSTILE, "n": None}]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "<script>alert(1)</script>" not in text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in text
+
+
+def test_hostile_provenance_strings_are_escaped():
+    provenance = {
+        "as_of": "2026-08-04", "insights_version": "0.3.0", "metric_registry_version": "0.1.0",
+        "graph_source": {"access": "library-interim", "sealed": True}, "policy_versions": None,
+        "scope_filter": {"patterns": [_HOSTILE], "excluded_count": 0},
+        "graph_staleness": {"available": True, "stale": False, "files_checked": 1,
+                             "changed": [_HOSTILE], "missing": [], "advice": _HOSTILE},
+    }
+    text = render_html(_snapshot(provenance=provenance))
+    assert "<script>alert(1)</script>" not in text
+    assert text.count("&lt;script&gt;alert(1)&lt;/script&gt;") == 3  # patterns, changed, advice
+
+
+def test_hostile_input_still_renders_successfully_never_a_hard_error():
+    facts = [{"subject_kind": "code_artifact", "subject_id": _HOSTILE, "predicate": _HOSTILE, "value": _HOSTILE}]
+    metrics = [{"metric_id": _HOSTILE, "metric_version": "1", "value": None, "reason": _HOSTILE, "n": None}]
+    text = render_html(_snapshot(facts=facts, metrics=metrics))  # must not raise
+    assert text.startswith("<!DOCTYPE html>")
+    assert "<script>alert(1)</script>" not in text
+
+
+def test_render_html_is_byte_identical_across_repeated_calls():
+    snapshot = _snapshot(
+        facts=[{"subject_kind": "code_artifact", "subject_id": "b", "predicate": "p", "value": 1},
+               {"subject_kind": "code_artifact", "subject_id": "a", "predicate": "p", "value": 2}],
+        metrics=[{"metric_id": "M2", "metric_version": "1", "value": 1, "reason": None, "n": 1},
+                 {"metric_id": "M1", "metric_version": "1", "value": None, "reason": "x", "n": None}],
+    )
+    first = render_html(snapshot)
+    second = render_html(snapshot)
+    assert first == second
+
+
+def test_run_render_byte_identical_on_repeated_render_of_same_snapshot(built_repo: Path):
+    snapshot = build_snapshot(built_repo, as_of="2026-07-29")
+    write_snapshot(built_repo, snapshot)
+
+    run_render(str(built_repo))
+    first_text = (built_repo / STORE_DIRNAME / REPORT_FILENAME).read_text(encoding="utf-8")
+    run_render(str(built_repo))
+    second_text = (built_repo / STORE_DIRNAME / REPORT_FILENAME).read_text(encoding="utf-8")
+
+    assert first_text == second_text

@@ -61,10 +61,12 @@
 | `cli` | active — type `cli`; help/discoverability, stdout/stderr hygiene, exit codes are already load-bearing conventions here (C2 idiom, NFR-3) | `/story-time`, `/peer-review`, `/demo-day` |
 | `library` | active — type `library`, confirmed by the user (2026-07-31) despite no external importer yet; public API surface, semver/deprecation discipline matter once any package (family or external) depends on `aspark_insights` directly | `/story-time`, `/peer-review` |
 | `security` | active — confirmed by the user (2026-07-31), proposed rather than mechanically derived. No characteristic in the standard trigger list (`handles-auth`/`is-public`/`handles-payments`/`handles-pii`) formally fires this for a local, no-network CLI. Grounded in real evidence: foundation's QA found a genuine Blocker path-traversal/arbitrary-file-write bug via an unvalidated `--as-of` (B5), plus two raw-traceback-leak bugs (B2, F1/F5) on malformed input. "Validate any input that becomes a filesystem path" and "never a raw traceback" are now proven-necessary disciplines, not speculative ones, even absent a network surface. | `/story-time`, `/peer-review`, `/demo-day` |
-| `seo` / `ux` / `api` / `i18n` / `data` | off — no website/web-app/api surface, no locale surface, no database (JSON snapshot files, not a DB) | — |
+| `ux` | active — confirmed 2026-08-03, proposed rather than mechanically derived (same pattern as `security` above). Trigger: `/story-time` is about to open for a scoped-down version of I5 `dashboards` (BACKLOG.md §3) — a single-audience static HTML report (whoever runs `insights render`, no role-switching) rendering the current snapshot (facts/metrics/provenance), built to ADR-5 (offline-first, air-gap, no second toolchain), with no server and at most expand/collapse interactivity. The original backlog's three-persona framing (Developer/Architect/Engineering Manager role-differentiated views) is explicitly deferred to a future I5b, pending evidence a second consumer actually exists — out of scope for this feature. Evaluated against the `web-app` type signal (SPA framework, routes, auth, app-like tool UI) and it doesn't match — no framework, no routing, no auth surface — so the project type stays `cli` + `library`, unchanged; `ux` activates on its own narrower grounds instead of relabeling the project. The concern is real regardless: a data-dense report, even for one audience, has genuine information-hierarchy, legibility and (for any interactive element) keyboard-operability requirements from the day this page ships. | `/story-time`, `/peer-review`, `/demo-day` |
+| `seo` / `api` / `i18n` / `data` | off — no website/web-app/api surface, no locale surface, no database (JSON snapshot files, not a DB) | — |
 
-- **Active-lens load:** 3 lenses active (`cli`, `library`, `security`). Below the 4+ threshold —
-  no elevated-load flag needed.
+- **Active-lens load:** 4 lenses active (`cli`, `library`, `security`, `ux`) — crossed the 4+
+  threshold as of the `ux` activation (2026-08-03). **Elevated-load flag: set.** Every phase
+  should scrutinize this stack rather than skim it — the flag is visibility, not a cap.
 
 ## 3. Technical Constraints
 
@@ -113,8 +115,22 @@
   retro, every finding a reviewer/QA closes is **re-verified by re-running the exact original
   repro**, not just by a new passing test — a green suite alone was not treated as sufficient
   evidence in this project's own precedent (`release.md` §6).
-- **Accessibility:** N/A — no UI surface exists (CLI/JSON only); revisit explicitly once I5
-  (`dashboards`, static HTML) ships.
+- **Accessibility:** activated 2026-08-03 alongside the `ux` lens, grounded in what I5's actual
+  deliverable is (BACKLOG.md §3: one self-contained static HTML page, ADR-5 offline-first/
+  air-gap, no server, at most expand/collapse interactivity) — not a generic "WCAG 2.1 AA"
+  copy-paste sized for a full interactive web app:
+  - Semantic HTML: a single `<h1>`, a coherent nested heading hierarchy, tabular metric data
+    marked up with real `<table>`/`<th>` elements (not `<div>` grids) — checkable by inspecting
+    the rendered HTML, not just the generator source.
+  - Color contrast: all text and any status/health indicator meet WCAG 2.1 AA contrast (4.5:1
+    normal text, 3:1 large text/graphics); any color-coded status (e.g. red/green health) also
+    carries a non-color cue (icon or text label) — color is never the only signal.
+  - Keyboard-operable: any interactive element the page ships (e.g. expand/collapse sections) is
+    reachable and operable via keyboard alone (Tab/Enter/Space); no mouse-only interaction.
+  - Deliberately out of scope: ARIA live regions and other dynamic-update affordances — the page
+    renders once from a snapshot and never updates in place, so there is nothing to announce.
+  - Self-contained per ADR-5: no external font/CDN/script fetch — the page renders fully offline,
+    so assistive-tech behavior never depends on a network call succeeding.
 - **Performance:** N/A for now — no real metric computation exists yet to set a meaningful
   latency budget (mirrors foundation's own NFR-6, marked N/A for the same reason). **OPEN
   QUESTION:** once I2 (`traceability-metrics`) ships real computation, a number should be set
@@ -171,3 +187,4 @@
 | Date | Change | Why |
 |---|---|---|
 | 2026-07-31 | Initial constitution | First `/charter` pass, run after the `foundation` (I1) increment released (v0.1.0). Grounds every section in what the shipped code, `.spark/BACKLOG.md`'s ADRs, and `foundation`'s spec/review/QA/release reports already demonstrate — no aspirational entries invented ahead of evidence. User confirmed all three flagged open questions in the same session: `security` lens active despite no network surface (grounded in real B5/B2/F1/F5 findings); `handles-pii` left off (the "never person-level metrics" Non-Negotiable already covers this more precisely); `library` type included now despite no external importer yet. |
+| 2026-08-03 | Activated `ux` lens (§2); replaced the Accessibility quality bar's `N/A` with a real, falsifiable bar (§4) | Triggered by `/story-time` about to open for a scoped-down version of I5 `dashboards` (BACKLOG.md §3: a single-audience static HTML report — whoever runs `insights render`, no role-switching — rendering the current snapshot, built to ADR-5 offline-first/air-gap, no server, no second toolchain; the backlog's original three-persona Developer/Architect/Engineering-Manager framing is deferred to a future I5b pending evidence a second consumer exists) — the constitution's own §4 had already flagged this exact moment as "revisit explicitly once I5 ships." Evaluated whether this deliverable meets the `web-app` type signal (SPA framework, routes, auth, app-like tool UI) and decided it doesn't — no framework, no routing, no auth surface — so the project type stays `cli` + `library`, unchanged; `ux` instead activates on its own narrower grounds, mirroring the `security` lens's precedent (proposed rather than mechanically derived, grounded in concrete evidence rather than a formally-firing type/characteristic trigger). Active-lens load crosses to 4 (`cli`, `library`, `security`, `ux`) — elevated-load flag now set. No other section touched: the standing performance-budget open question in §4 is untouched by this amendment. |

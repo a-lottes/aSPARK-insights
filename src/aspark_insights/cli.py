@@ -13,8 +13,9 @@ import sys
 from pathlib import Path
 
 from aspark_insights.build import build_snapshot
-from aspark_insights.errors import GraphNotBuiltError, InsightsError, NotImplementedStub, VerifyMismatchError
+from aspark_insights.errors import GraphNotBuiltError, InsightsError, VerifyMismatchError
 from aspark_insights.query import run_query
+from aspark_insights.render import run_render
 from aspark_insights.serialization import canonical_json
 from aspark_insights.store import (
     read_snapshot_dict,
@@ -72,7 +73,16 @@ def _build_parser() -> argparse.ArgumentParser:
              "--output used at build time, if any. Fixed at launch, same as --repo.",
     )
 
-    sub.add_parser("render", help="Render a dashboard (not yet implemented).")
+    p_render = sub.add_parser(
+        "render",
+        help="Render the latest snapshot as one self-contained HTML report.",
+    )
+    p_render.add_argument("--repo", default=".", help="Repo root (default: .)")
+    p_render.add_argument(
+        "--output", default=None,
+        help="Where the snapshot was written (default: --repo). Must match the --output "
+             "used at build time, if any.",
+    )
 
     p_diff = sub.add_parser("diff", help="Diff two snapshots.")
     p_diff.add_argument("a")
@@ -130,7 +140,9 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _cmd_render(args: argparse.Namespace) -> int:
-    raise NotImplementedStub("insights render is not implemented yet (dashboards land at I5)")
+    path = run_render(args.output or args.repo)
+    print(canonical_json({"report": str(path)}), end="")
+    return 0
 
 
 def _cmd_diff(args: argparse.Namespace) -> int:

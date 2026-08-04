@@ -1,4 +1,6 @@
-"""US-6: CLI help, `render` stub, `query` readback (AC-6.1, AC-6.5, NFR-3)."""
+"""US-6: CLI help, `query` readback (AC-6.1, AC-6.5, NFR-3). `render`'s own behavior
+is covered by tests/test_render.py, not here — this file kept the `--help`
+parametrization since it still exercises every subcommand, `render` included."""
 
 from __future__ import annotations
 
@@ -34,13 +36,6 @@ def test_help_prints_usage_and_exits_0(tmp_path: Path, command: str):
     result = _run_cli(tmp_path, command, "--help")
     assert result.returncode == 0
     assert "usage" in result.stdout.lower()
-
-
-def test_render_exits_1_with_named_not_implemented_error(tmp_path: Path):
-    result = _run_cli(tmp_path, "render")
-    assert result.returncode == 1
-    assert "not_implemented" in result.stderr
-    assert result.stdout == ""
 
 
 def test_query_reads_back_raw_facts_and_provenance_from_last_snapshot(built_repo: Path):
