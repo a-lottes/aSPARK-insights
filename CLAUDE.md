@@ -1,9 +1,11 @@
 # aspark-insights — project conventions
 
 Patterns and process nudges kept from the `foundation` (I1),
-`traceability-metrics` (I2), and `public-repo-polish` cycles. Read
-`.spark/foundation/release.md` §6, `.spark/traceability-metrics/release.md` §6,
-and `.spark/public-repo-polish/release.md` §6 for the full story behind each.
+`traceability-metrics` (I2), `public-repo-polish`, and `mcp-server` (I7)
+cycles. Read `.spark/foundation/release.md` §6,
+`.spark/traceability-metrics/release.md` §6,
+`.spark/public-repo-polish/release.md` §6, and `.spark/mcp-server/release.md`
+§6 for the full story behind each.
 
 ## Code patterns
 
@@ -40,6 +42,17 @@ and `.spark/public-repo-polish/release.md` §6 for the full story behind each.
   `TRC-005-extracted`, `TRC-005-inferred` — each with its own `n`. Keep this as
   the house style rather than re-litigating the shape per future multi-part
   metric.
+
+- **When a second surface (MCP tool, future HTTP endpoint, …) needs to expose
+  logic the CLI already has, factor a shared core function first and wire two
+  thin adapters to it — never duplicate the logic or reimplement the read
+  path.** `mcp-server` (I7) did this with `query.py:run_query()`: both
+  `cli._cmd_query` and the MCP `query` tool call the same function, so
+  CLI↔MCP parity became a structural property (provable by one regression
+  test — `test_cli_query_stdout_is_byte_unchanged_after_the_run_query_refactor`)
+  rather than something that has to be manually re-checked every time either
+  surface changes. Keep this as the default design move for any future
+  second adapter, rather than re-deriving parity by hand each time.
 
 - **Prefer disclosing a new risk through an existing provenance field over
   inventing a bespoke new one.** The A3 risk (this family's current
