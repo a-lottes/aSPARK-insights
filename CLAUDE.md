@@ -1,11 +1,11 @@
 # aspark-insights — project conventions
 
 Patterns and process nudges kept from the `foundation` (I1),
-`traceability-metrics` (I2), `public-repo-polish`, and `mcp-server` (I7)
-cycles. Read `.spark/foundation/release.md` §6,
+`traceability-metrics` (I2), `public-repo-polish`, `mcp-server` (I7), and
+`snapshot-report` (I5) cycles. Read `.spark/foundation/release.md` §6,
 `.spark/traceability-metrics/release.md` §6,
-`.spark/public-repo-polish/release.md` §6, and `.spark/mcp-server/release.md`
-§6 for the full story behind each.
+`.spark/public-repo-polish/release.md` §6, `.spark/mcp-server/release.md` §6,
+and `.spark/snapshot-report/release.md` §6 for the full story behind each.
 
 ## Code patterns
 
@@ -122,3 +122,31 @@ cycles. Read `.spark/foundation/release.md` §6,
   checked acceptance criterion**, not an afterthought — `public-repo-polish`
   scoped this explicitly (US-5) rather than leaving family consistency to
   chance. Keep this precedent for any future family-repo public-facing doc.
+
+- **Never take a fix on the reviewer's or tester's word alone — reproduce it
+  yourself with your own input, not the original repro.** `snapshot-report`'s
+  F1 fix (a wrong-sub-shape snapshot crashing `render` with a raw traceback)
+  was re-verified twice, each time by actively trying to *route around* the
+  fix with different malformed inputs than the original bug report (a
+  list-of-non-dicts, a null nested field, mixed-type sort keys) rather than
+  just confirming the described patch was present — first by the Reviewer in
+  a genuinely adversarial re-review, then again independently by the QA
+  Tester, who built their own hand-crafted hostile `<script>` snapshot from
+  scratch instead of trusting the review's account of it. A review or QA
+  pass that only checks "is the fix present" is weaker than one that tries
+  to break it again with fresh inputs. Keep this adversarial-reproduction
+  bar for both `/peer-review` and `/demo-day` on every future security or
+  input-validation finding.
+
+- **Measure visual-surface claims, don't eyeball them.** `snapshot-report`'s
+  `/demo-day` — this project's first genuinely hands-on browser QA pass —
+  established the technique: contrast ratios via `getComputedStyle` (not a
+  glance, e.g. it caught the table-gridline color sitting at ≈2.85:1 against
+  the WCAG 3:1 non-text threshold), viewport/scroll behavior via
+  `window.innerWidth`/`scrollWidth`/`clientWidth` (not a screenshot — this is
+  what would have caught the missing `<meta name="viewport">` bug even if
+  `/increment` hadn't already found it live), and section/DOM ordering via
+  byte offsets in `outerHTML` rather than a visual read-through. Keep this as
+  the default QA technique for any future UI-facing feature, alongside the
+  existing "render Markdown through GitHub's real API" technique from
+  `public-repo-polish`.
