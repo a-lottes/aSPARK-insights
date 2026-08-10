@@ -24,8 +24,11 @@ def test_provenance_scope_filter_and_staleness_always_present_in_dict():
         policy_versions=None,
         scope_filter=ScopeFilterResult(patterns=(), excluded_count=0),
         graph_staleness=None,
+        artifact_probe={"outcome": "absent", "matched_file_count": 0, "matched_filenames": [], "feature_dir_count": 0, "detail": None},
     )
     d = prov.to_dict()
     assert "scope_filter" in d
     assert "graph_staleness" in d
     assert d["graph_staleness"] is None
+    assert "artifact_probe" in d
+    assert d["artifact_probe"]["outcome"] == "absent"

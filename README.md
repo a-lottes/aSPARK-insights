@@ -2,12 +2,17 @@
 
 > **Real, hand-verifiable engineering metrics computed from your repo's actual delivery graph — never a second-guessed number, never a fabricated one.**
 
-> **Project status: shipped at `v0.2.0` — real traceability coverage, not yet dashboards.**
+> **Project status: shipped at `v0.5.0` — real traceability coverage, a
+> self-contained HTML report, an MCP query tool, honest nulls throughout.**
 > You can build a snapshot today and get real Story→Task, AC→QA and Task→Code
 > coverage numbers, each with its own sample size, computed against
-> [aspark-graph](https://github.com/a-lottes/aSPARK-graph)'s facts (see
-> [Install](#install) and [Usage](#usage)). What's still missing: dashboards
-> (static HTML), flow/cycle-time metrics, architecture-health metrics, and
+> [aspark-graph](https://github.com/a-lottes/aSPARK-graph)'s facts, then render
+> them as one offline HTML report or query them over MCP (see [Install](#install)
+> and [Usage](#usage)). A metric whose underlying evidence never made it into
+> the graph — not "nothing happened", but "the graph never saw it" — reports an
+> honest `null` with a reason instead of a fabricated `0%` or `100%` (see
+> [Absent evidence vs. a real zero](#absent-evidence-vs-a-real-zero)). What's
+> still missing: flow/cycle-time metrics, architecture-health metrics, and
 > policy-derived compliance metrics — all future increments. Not yet on PyPI —
 > see [Install](#install) for the source-only setup.
 
@@ -72,14 +77,46 @@ uv run insights diff /tmp/insights-scratch/.aspark-insights/snapshots/2026-08-01
 # (verify only reads/recomputes — it has no --output of its own)
 uv run insights verify /tmp/insights-scratch/.aspark-insights/snapshots/2026-08-02.json --repo ../aSPARK-graph
 
-# Not yet implemented — exits 1 with a named error rather than succeeding silently
-uv run insights render
+# Render the latest snapshot as one self-contained, offline HTML report —
+# writes <output>/.aspark-insights/report.html, prints its resolved path
+uv run insights render --repo ../aSPARK-graph --output /tmp/insights-scratch
 ```
 
 `insights build` requires a graph already built by `aspark-graph build` at the
 target repo — it never builds one itself. Every metric reports a real value
 with its sample size, or an honest `null` with a reason (e.g. `"no Story nodes
 found in graph"`) when there's nothing to measure yet.
+
+### Absent evidence vs. a real zero
+
+Some metrics (currently `TRC-001`, `TRC-002`, `TRC-003`, `TRC-004-orphan-tasks`,
+`TRC-004-unverified-acs`) depend on a specific graph evidence kind — a
+`maps_to`, `implements`, or passing-`QACheck` `verifies` edge. If that evidence
+kind's count is **zero across the whole graph**, the metric reports `null`
+with a reason instead of a computed `0%`/`100%` — a repo-wide zero is exactly
+as likely to mean "the graph's artifact parser never recognized your artifact
+filenames" as it is to mean "nothing happened", and this project's central
+promise (never invent a number) means it never guesses which.
+
+`insights build` also checks, read-only, whether `<repo>/.spark/*/{qa.md,review.md}`
+files exist on disk (never their contents — presence only, one level deep, no
+symlinks followed). When they do, the null's reason names that too, turning
+"we can't measure this" into "here's your actual bug":
+
+```
+no verifies-from-passing-QACheck edges found in the graph (0 of 41);
+4 matching artifact file(s) found under .spark/ (qa.md, review.md)
+```
+
+The rendered HTML report surfaces this as a top-band notice naming how many
+metrics were affected and where the detail lives, in addition to — never
+instead of — the per-metric reason in the Metrics table.
+
+Because this changed what some metrics' `null` conditions mean, the affected
+metrics shipped a new `metric_version` (`2.0.0`) in this release — a
+pre-`v0.5.0` stored snapshot legitimately fails `insights verify` with the
+existing `verify_mismatch` error (its recorded values were computed against a
+metric definition that no longer exists, never silently reinterpreted).
 
 ### MCP
 
@@ -100,7 +137,11 @@ The repo/output location is fixed once at launch — `query` takes **no argument
       unverified counts, evidence confidence-mix) and MTA-001…003 (sample
       sizes, scope-filter disclosure, graph-staleness disclosure) — computed
       and dogfooded against the family's own repos (`v0.2.0`)
-- [ ] Dashboards — static HTML, offline-first (planned)
+- [x] Snapshot report — self-contained, offline HTML render of the latest
+      snapshot (`v0.4.0`)
+- [x] Measurement honesty — a repo-wide-absent evidence kind reports `null`
+      with a reason (disclosing a real `.spark/` artifact if one exists)
+      instead of a fabricated `0%`/`100%`, registry-wide (`v0.5.0`)
 - [ ] Flow/cycle-time metrics — blocked on `aspark-graph` shipping
       release/commit time data
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene
@@ -115,7 +156,7 @@ The repo/output location is fixed once at launch — `query` takes **no argument
 | **[aSPARK Core](https://github.com/a-lottes/aSPARK)** | shipped, `v0.4.0` | Delivery process, roles, gates, templates |
 | **[aspark-graph](https://github.com/a-lottes/aSPARK-graph)** | shipped, `v0.7.0` (on PyPI) | Traceability and engineering knowledge graph |
 | **[aSPARK-policy](https://github.com/a-lottes/aSPARK-policy)** | shipped, `v0.2.0` (format + catalog; enforcement open) | Enterprise engineering standards and governance |
-| **aSPARK-insights** (this repo) | shipped, `v0.2.0` (real traceability metrics; dashboards ahead) | Engineering metrics and management dashboards |
+| **aSPARK-insights** (this repo) | shipped, `v0.5.0` (traceability metrics, HTML report, MCP server, honest nulls) | Engineering metrics and management dashboards |
 
 The graph delivers fact-queries; insights delivers the analytics product —
 versioned metric definitions, time series over snapshots, joins, dashboards —

@@ -74,15 +74,20 @@ def test_trc_metrics_against_the_sibling_repo_are_real_values_or_honest_null():
     not SELF_GRAPH_JSON.exists(),
     reason=f"no built graph at {SELF_GRAPH_JSON} — run `aspark-graph build .` in this repo first",
 )
-def test_trc_002_against_this_repos_own_graph_demonstrates_the_a3_caveat():
-    """A3 (spec.md §3): this repo uses the *current* review.md/qa.md naming, which
-    the installed aspark-graph's artifact parser doesn't recognize (it looks for
-    the legacy review-report.md/qa-report.md). Story/AC/Task nodes parse fine (from
-    spec.md/plan.md, which the parser *does* recognize), but zero QACheck nodes
-    ever populate here — so TRC-002 reads a real, honestly-computed 0%, not because
-    nothing was verified, but because the graph can't see the verification. This
-    test names that caveat explicitly rather than either hiding it or treating a
-    clean-looking 0% as a red flag."""
+def test_trc_002_against_this_repos_own_graph_demonstrates_the_measurement_honesty_fix():
+    """A3 (spec.md §3) → measurement-honesty: this repo uses the *current*
+    review.md/qa.md naming, which the installed graph tool's artifact parser
+    doesn't recognize (it looks for the legacy review-report.md/qa-report.md).
+    Story/AC/Task nodes parse fine (from spec.md/plan.md, which the parser
+    *does* recognize), but zero QACheck nodes ever populate here — before this
+    feature, TRC-002 read a confident, fabricated 0.0/n=41 (a real bug, not a
+    real measurement — see `.spark/traceability-metrics/spec.md` A3 and
+    `.spark/measurement-honesty/spec.md` §1). This test proves the fix against
+    the real, unmocked dogfood target: the evidence-absent gate now nulls both
+    QA metrics with a reason naming the real observed counts, while every
+    other TRC metric — whose evidence layer genuinely exists on this repo —
+    still carries a real computed value, not also nulled by an over-broad
+    fix."""
     snap = build_snapshot(REPO_ROOT, as_of="2026-07-31")
 
     ac_facts = [f for f in snap.facts if f.predicate == "acceptance_criterion"]
@@ -92,9 +97,33 @@ def test_trc_002_against_this_repos_own_graph_demonstrates_the_a3_caveat():
         "artifact parser on a current-convention repo"
     )
 
-    trc_002 = next(m for m in snap.metrics if m.metric_id == "TRC-002")
-    assert trc_002.value == 0.0  # honestly computed, not null — the ACs *do* exist
-    assert trc_002.n == len(ac_facts)
+    by_id = {m.metric_id: m for m in snap.metrics}
+
+    trc_002 = by_id["TRC-002"]
+    assert trc_002.value is None
+    assert trc_002.n == len(ac_facts)  # n preserved, never dropped or zeroed
+    assert trc_002.reason and not trc_002.reason[0].isdigit()  # word-first (AC-2.1/D7)
+    assert "0 of" in trc_002.reason  # the real graph count is named, not hidden
+
+    trc_004_unverified = by_id["TRC-004-unverified-acs"]
+    assert trc_004_unverified.value is None
+    assert trc_004_unverified.n == len(ac_facts)
+
+    # The probe found this repo's own real .spark/*/qa.md files on disk —
+    # the reason names that, turning "we can't measure this" into "here's
+    # the file we failed to parse" (spec §1's own success signal).
+    assert "matching artifact file" in trc_002.reason
+
+    # The fix is scoped to the evidence-absent metrics only — every other
+    # TRC entry, whose maps_to/implements evidence genuinely exists on this
+    # repo's graph, still carries a real computed value.
+    for metric_id in ("TRC-001", "TRC-003", "TRC-004-orphan-tasks"):
+        metric = by_id[metric_id]
+        assert metric.value is not None, f"{metric_id} should not be gated on this repo's real graph"
+
+    artifact_probe = snap.provenance.artifact_probe
+    assert artifact_probe["outcome"] == "present"
+    assert artifact_probe["matched_file_count"] > 0
 
 
 def test_zero_node_repo_reports_honest_null_not_a_fabricated_value(tmp_path: Path):

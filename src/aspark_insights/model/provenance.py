@@ -43,6 +43,7 @@ class Provenance:
     policy_versions: dict | None
     scope_filter: ScopeFilterResult
     graph_staleness: dict | None  # MTA-002: the graph's own `staleness` result at build time
+    artifact_probe: dict  # AC-2.5: the .spark/ presence-probe outcome, sealed on every build
 
     def to_dict(self) -> dict:
         return {
@@ -53,4 +54,5 @@ class Provenance:
             "policy_versions": self.policy_versions,
             "scope_filter": self.scope_filter.to_dict(),
             "graph_staleness": self.graph_staleness,
+            "artifact_probe": self.artifact_probe,
         }

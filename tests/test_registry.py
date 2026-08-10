@@ -56,4 +56,26 @@ def test_shared_registry_registers_traceability_metrics_on_import():
     from aspark_insights.metrics import traceability  # noqa: F401
 
     listing = registry.list()
-    assert {"metric_id": "TRC-001", "metric_version": "1.0.0"} in listing
+    assert {"metric_id": "TRC-001", "metric_version": "2.0.0"} in listing
+
+
+# --- measurement-honesty: evidence_kind storage/lookup ----------------------
+
+
+def test_register_without_evidence_kind_defaults_to_none():
+    reg = MetricRegistry()
+    reg.register("TEST-001", "1.0.0", _test_only_metric)
+    assert reg.evidence_kind("TEST-001", "1.0.0") is None
+
+
+def test_register_stores_and_exposes_its_evidence_kind():
+    from aspark_insights.metrics.evidence import MAPS_TO_EVIDENCE
+
+    reg = MetricRegistry()
+    reg.register("TEST-001", "1.0.0", _test_only_metric, evidence_kind=MAPS_TO_EVIDENCE)
+    assert reg.evidence_kind("TEST-001", "1.0.0") is MAPS_TO_EVIDENCE
+
+
+def test_evidence_kind_for_unregistered_pair_is_none_not_a_crash():
+    reg = MetricRegistry()
+    assert reg.evidence_kind("NOPE", "9.9.9") is None

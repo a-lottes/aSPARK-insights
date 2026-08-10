@@ -59,3 +59,36 @@ def test_diff_missing_file_exits_1_with_named_error_not_a_traceback(tmp_path: Pa
     assert result.returncode == 1
     assert "snapshot_unreadable" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_diff_shows_metric_version_change_together_with_value_change(tmp_path: Path):
+    """AC-5.3: a metric whose definition changed (measurement-honesty's version
+    bump) shows both the version and the value change in one diff — never a
+    version bump silently hidden behind an unexplained value change."""
+    common_provenance = {
+        "as_of": "2026-07-29", "insights_version": "0.4.0", "metric_registry_version": "0.1.0",
+        "graph_source": {"access": "library-interim", "sealed": True}, "policy_versions": None,
+        "scope_filter": {"patterns": [], "excluded_count": 0}, "graph_staleness": None,
+        "artifact_probe": {"outcome": "absent", "matched_file_count": 0, "matched_filenames": [], "feature_dir_count": 0, "detail": None},
+    }
+    snapshot_a = {
+        "facts": [], "provenance": common_provenance,
+        "metrics": [{"metric_id": "TRC-002", "metric_version": "1.0.0", "value": 0.0, "reason": None, "n": 41}],
+    }
+    snapshot_b = {
+        "facts": [], "provenance": common_provenance,
+        "metrics": [{"metric_id": "TRC-002", "metric_version": "2.0.0", "value": None, "reason": "no evidence found", "n": 41}],
+    }
+    path_a = tmp_path / "a.json"
+    path_b = tmp_path / "b.json"
+    path_a.write_text(json.dumps(snapshot_a), encoding="utf-8")
+    path_b.write_text(json.dumps(snapshot_b), encoding="utf-8")
+
+    result = _run_cli(tmp_path, "diff", str(path_a), str(path_b))
+    assert result.returncode == 0, result.stderr
+    diff = json.loads(result.stdout)
+    assert diff["metrics"]["a"] == snapshot_a["metrics"]
+    assert diff["metrics"]["b"] == snapshot_b["metrics"]
+    # both the version string and the value differ in the same shown diff
+    assert diff["metrics"]["a"][0]["metric_version"] != diff["metrics"]["b"][0]["metric_version"]
+    assert diff["metrics"]["a"][0]["value"] != diff["metrics"]["b"][0]["value"]

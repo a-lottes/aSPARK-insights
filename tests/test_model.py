@@ -59,6 +59,7 @@ def _provenance(**overrides) -> Provenance:
         policy_versions=None,
         scope_filter=ScopeFilterResult(patterns=(), excluded_count=0),
         graph_staleness=None,
+        artifact_probe={"outcome": "absent", "matched_file_count": 0, "matched_filenames": [], "feature_dir_count": 0, "detail": None},
     )
     defaults.update(overrides)
     return Provenance(**defaults)

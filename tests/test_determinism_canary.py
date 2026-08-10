@@ -20,11 +20,13 @@ from aspark_insights.metrics.registry import MetricRegistry
 from aspark_insights.model.provenance import GraphSource, Provenance, ScopeFilterResult
 from aspark_insights.model.snapshot import Snapshot
 from aspark_insights.model.value import MetricValue
+from aspark_insights.render import REPORT_FILENAME
 from aspark_insights.serialization import canonical_json
-from aspark_insights.store import snapshot_path
+from aspark_insights.store import STORE_DIRNAME, snapshot_path
 
 FIXTURE_GRAPH = Path(__file__).parent / "fixtures" / "graph.json"
 TRACE_FIXTURE_GRAPH = Path(__file__).parent / "fixtures" / "trace_graph.json"
+NO_QA_FIXTURE_GRAPH = Path(__file__).parent / "fixtures" / "no_qa_graph.json"
 FIXED_AS_OF = "2026-07-29"  # frozen, never derived from the wall clock
 
 
@@ -78,6 +80,49 @@ def test_double_build_against_trace_fixture_is_byte_identical_with_real_metrics(
     assert bytes_1 == bytes_2, "double build with a non-empty metrics catalog must be byte-identical"
 
 
+def test_double_build_with_populated_spark_tree_is_byte_identical_snapshot_and_report(tmp_path: Path):
+    """AC-3.8/NFR-5: measurement-honesty adds a second filesystem read (the
+    artifact probe) to the derivation path — this extends the canary past an
+    absent .spark/ to a populated one, and past the snapshot JSON to the
+    rendered report, so both new surfaces are proven deterministic, not just
+    asserted to be."""
+    graph_dir = tmp_path / ".aspark-graph"
+    graph_dir.mkdir()
+    shutil.copyfile(NO_QA_FIXTURE_GRAPH, graph_dir / "graph.json")
+
+    # A populated .spark/ tree with several feature directories, exercising
+    # the probe's real one-level traversal, not an empty/absent case.
+    for feature in ("alpha", "beta", "gamma"):
+        feature_dir = tmp_path / ".spark" / feature
+        feature_dir.mkdir(parents=True)
+        (feature_dir / "qa.md").write_text(f"# QA: {feature}\n", encoding="utf-8")
+        (feature_dir / "review.md").write_text(f"# Review: {feature}\n", encoding="utf-8")
+
+    run_1 = _run_cli(tmp_path, "build", "--as-of", FIXED_AS_OF)
+    assert run_1.returncode == 0, run_1.stderr
+    snapshot_bytes_1 = snapshot_path(tmp_path, FIXED_AS_OF).read_bytes()
+    render_1 = _run_cli(tmp_path, "render")
+    assert render_1.returncode == 0, render_1.stderr
+    report_bytes_1 = (tmp_path / STORE_DIRNAME / REPORT_FILENAME).read_bytes()
+
+    run_2 = _run_cli(tmp_path, "build", "--as-of", FIXED_AS_OF)
+    assert run_2.returncode == 0, run_2.stderr
+    snapshot_bytes_2 = snapshot_path(tmp_path, FIXED_AS_OF).read_bytes()
+    render_2 = _run_cli(tmp_path, "render")
+    assert render_2.returncode == 0, render_2.stderr
+    report_bytes_2 = (tmp_path / STORE_DIRNAME / REPORT_FILENAME).read_bytes()
+
+    assert snapshot_bytes_1 == snapshot_bytes_2, "double build with a populated .spark/ must be byte-identical"
+    assert report_bytes_1 == report_bytes_2, "double render with a populated .spark/ must be byte-identical"
+
+    import json
+
+    metrics = json.loads(snapshot_bytes_1)["metrics"]
+    trc_002 = next(m for m in metrics if m["metric_id"] == "TRC-002")
+    assert trc_002["value"] is None and trc_002["n"]  # evidence absent, n>0 — the gate fired
+    assert b"NOT COMPUTED" in report_bytes_1  # the caveat actually rendered
+
+
 def test_canary_would_detect_an_ambient_clock_violation(monkeypatch):
     """Proves the byte-compare technique itself catches the regression class ADR-4 forbids.
 
@@ -106,6 +151,7 @@ def test_canary_would_detect_an_ambient_clock_violation(monkeypatch):
         policy_versions=None,
         scope_filter=ScopeFilterResult(patterns=(), excluded_count=0),
         graph_staleness=None,
+        artifact_probe={"outcome": "absent", "matched_file_count": 0, "matched_filenames": [], "feature_dir_count": 0, "detail": None},
     )
 
     snapshot_1 = Snapshot.seal(facts=[], metrics=[fn((), as_of=FIXED_AS_OF)], provenance=provenance)

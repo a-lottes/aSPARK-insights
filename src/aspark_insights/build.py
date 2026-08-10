@@ -13,9 +13,11 @@ from datetime import datetime
 from pathlib import Path
 
 from aspark_insights import __version__ as INSIGHTS_VERSION
+from aspark_insights.artifact_probe import probe_artifacts
 from aspark_insights.errors import InsightsError, InvalidAsOfError, PolicyUnavailable
 from aspark_insights.metrics import traceability  # noqa: F401 - registers TRC-*/MTA-* on import
 from aspark_insights.metrics.collectors import collect_facts
+from aspark_insights.metrics.evidence import gate as evidence_gate
 from aspark_insights.metrics.registry import registry as METRIC_REGISTRY
 from aspark_insights.metrics.scope import apply_scope_filter
 from aspark_insights.model.provenance import GraphSource, Provenance
@@ -75,12 +77,27 @@ def build_snapshot(
     graph_doc, scope_result = apply_scope_filter(graph_doc)
 
     graph_staleness = _collect_staleness(staleness_port or CLIGraphPort(), repo_root)
+    artifact_probe = probe_artifacts(repo_root)  # AC-2.5/AC-2.6: build time only, never re-run by query/render/diff/verify
 
     facts = tuple(collect_facts(graph_doc))
-    metrics = [
-        METRIC_REGISTRY.get(entry["metric_id"], entry["metric_version"])(facts, as_of=as_of)
-        for entry in METRIC_REGISTRY.list()
-    ]
+    metrics = []
+    for entry in METRIC_REGISTRY.list():
+        mid, mver = entry["metric_id"], entry["metric_version"]
+        raw_result = METRIC_REGISTRY.get(mid, mver)(facts, as_of=as_of)
+        if raw_result.value is None and raw_result.n:
+            # Build-loop invariant (measurement-honesty T3): only the evidence
+            # gate below may produce a null with a truthy n — render's caveat
+            # trigger (US-4) is defined as exactly that shape, so a metric
+            # function that produced it on its own would silently mistrigger
+            # or evade the caveat. A programming-contract violation, not a
+            # user-facing failure mode — surfaced loudly, not swallowed.
+            raise AssertionError(
+                f"metric {mid} v{mver} returned value=None with truthy n={raw_result.n} "
+                "from its own computation — only metrics.evidence.gate() may produce "
+                "that shape"
+            )
+        kind = METRIC_REGISTRY.evidence_kind(mid, mver)
+        metrics.append(evidence_gate(raw_result, kind, facts, artifact_probe))
 
     policy_result = (policy_port or NullPolicyPort()).resolve(str(repo_root))
     policy_versions = None if isinstance(policy_result, PolicyUnavailable) else policy_result
@@ -93,5 +110,6 @@ def build_snapshot(
         policy_versions=policy_versions,
         scope_filter=scope_result,
         graph_staleness=graph_staleness,
+        artifact_probe=artifact_probe.to_dict(),
     )
     return Snapshot.seal(facts=facts, metrics=metrics, provenance=provenance)

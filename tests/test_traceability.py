@@ -23,7 +23,7 @@ def _task_fact(subject_id: str, *, mapped: bool, implements: bool) -> Fact:
 def test_trc_001_share_of_mapped_stories():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-001", "1.0.0")
+    fn = registry.get("TRC-001", "2.0.0")
     facts = (
         _story_fact("story:f:US-1", mapped=True),
         _story_fact("story:f:US-2", mapped=True),
@@ -38,7 +38,7 @@ def test_trc_001_share_of_mapped_stories():
 def test_trc_001_zero_stories_is_null_with_reason_not_zero_division():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-001", "1.0.0")
+    fn = registry.get("TRC-001", "2.0.0")
     result = fn((), as_of="2026-07-29")
     assert result.value is None
     assert result.n == 0
@@ -48,7 +48,7 @@ def test_trc_001_zero_stories_is_null_with_reason_not_zero_division():
 def test_trc_001_ignores_non_story_facts():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-001", "1.0.0")
+    fn = registry.get("TRC-001", "2.0.0")
     facts = (
         _story_fact("story:f:US-1", mapped=True),
         Fact(SubjectKind.CODE_ARTIFACT, "task:f:T1", "task", {"mapped": True, "implements": False}),
@@ -61,7 +61,7 @@ def test_trc_001_ignores_non_story_facts():
 def test_trc_002_share_of_verified_pass_acs():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-002", "1.0.0")
+    fn = registry.get("TRC-002", "2.0.0")
     facts = (
         _ac_fact("ac:f:AC-1.1", verified_pass=True),
         _ac_fact("ac:f:AC-1.2", verified_pass=False),
@@ -74,7 +74,7 @@ def test_trc_002_share_of_verified_pass_acs():
 def test_trc_002_zero_acs_is_null_with_reason():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-002", "1.0.0")
+    fn = registry.get("TRC-002", "2.0.0")
     result = fn((), as_of="2026-07-29")
     assert result.value is None
     assert result.n == 0
@@ -84,7 +84,7 @@ def test_trc_002_zero_acs_is_null_with_reason():
 def test_trc_003_share_of_implementing_tasks():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-003", "1.0.0")
+    fn = registry.get("TRC-003", "2.0.0")
     facts = (
         _task_fact("task:f:T1", mapped=True, implements=True),
         _task_fact("task:f:T2", mapped=True, implements=False),
@@ -98,7 +98,7 @@ def test_trc_003_share_of_implementing_tasks():
 def test_trc_003_zero_tasks_is_null_with_reason():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-003", "1.0.0")
+    fn = registry.get("TRC-003", "2.0.0")
     result = fn((), as_of="2026-07-29")
     assert result.value is None
     assert result.n == 0
@@ -110,7 +110,7 @@ def test_trc_004_orphan_tasks_matches_gate_healths_definition():
     open_findings (A3's Finding-node filename mismatch is sidestepped entirely)."""
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-004-orphan-tasks", "1.0.0")
+    fn = registry.get("TRC-004-orphan-tasks", "2.0.0")
     facts = (
         _task_fact("task:f:T1", mapped=True, implements=True),
         _task_fact("task:f:T2", mapped=False, implements=True),  # orphan: not mapped
@@ -123,7 +123,7 @@ def test_trc_004_orphan_tasks_matches_gate_healths_definition():
 def test_trc_004_unverified_acs_matches_gate_healths_definition():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    fn = registry.get("TRC-004-unverified-acs", "1.0.0")
+    fn = registry.get("TRC-004-unverified-acs", "2.0.0")
     facts = (
         _ac_fact("ac:f:AC-1.1", verified_pass=True),
         _ac_fact("ac:f:AC-1.2", verified_pass=False),  # unverified
@@ -136,8 +136,8 @@ def test_trc_004_unverified_acs_matches_gate_healths_definition():
 def test_trc_004_zero_denominator_for_both_entries():
     from aspark_insights.metrics import traceability  # noqa: F401
 
-    orphan_fn = registry.get("TRC-004-orphan-tasks", "1.0.0")
-    unverified_fn = registry.get("TRC-004-unverified-acs", "1.0.0")
+    orphan_fn = registry.get("TRC-004-orphan-tasks", "2.0.0")
+    unverified_fn = registry.get("TRC-004-unverified-acs", "2.0.0")
 
     orphan_result = orphan_fn((), as_of="2026-07-29")
     assert orphan_result.value is None
@@ -152,8 +152,8 @@ def test_trc_004_is_two_distinct_entries_never_blended():
     from aspark_insights.metrics import traceability  # noqa: F401
 
     listing = registry.list()
-    assert {"metric_id": "TRC-004-orphan-tasks", "metric_version": "1.0.0"} in listing
-    assert {"metric_id": "TRC-004-unverified-acs", "metric_version": "1.0.0"} in listing
+    assert {"metric_id": "TRC-004-orphan-tasks", "metric_version": "2.0.0"} in listing
+    assert {"metric_id": "TRC-004-unverified-acs", "metric_version": "2.0.0"} in listing
     assert not any(entry["metric_id"] == "TRC-004" for entry in listing)
 
 
@@ -225,4 +225,22 @@ def test_shared_registry_refuses_to_re_register_a_shipped_id_and_version():
         raise AssertionError("should never be called")
 
     with pytest.raises(ValueError):
-        registry.register("TRC-001", "1.0.0", _decoy)
+        registry.register("TRC-001", "2.0.0", _decoy)
+
+
+def test_superseded_v1_metrics_are_never_left_registered_alongside_v2():
+    """AC-5.2: a superseded definition is removed, not left registered
+    alongside its successor — one snapshot must never be able to carry both
+    the honest null and the old fabricated zero."""
+    from aspark_insights.metrics import traceability  # noqa: F401
+
+    listing = registry.list()
+    bumped_ids = {
+        "TRC-001", "TRC-002", "TRC-003", "TRC-004-orphan-tasks", "TRC-004-unverified-acs",
+    }
+    for mid in bumped_ids:
+        assert {"metric_id": mid, "metric_version": "1.0.0"} not in listing
+        assert {"metric_id": mid, "metric_version": "2.0.0"} in listing
+    # TRC-005-*'s gate is a no-op (evidence == denominator) — unchanged version.
+    for tier in ("declared", "extracted", "inferred"):
+        assert {"metric_id": f"TRC-005-{tier}", "metric_version": "1.0.0"} in listing

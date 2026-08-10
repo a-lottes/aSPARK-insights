@@ -119,6 +119,17 @@ def test_render_help_documents_real_behavior_not_not_implemented(tmp_path: Path)
     assert "--output" in result.stdout
 
 
+def test_build_help_documents_the_spark_artifact_presence_read(tmp_path: Path):
+    """NFR-6: build --help must document that build also *reads* <repo>/.spark/
+    for artifact presence (a read, never a write) — the project's own
+    "document the write-location behavior directly in --help text" convention
+    (CLAUDE.md), extended to this feature's new read."""
+    result = _run_cli(tmp_path, "build", "--help")
+    assert result.returncode == 0
+    assert ".spark/" in result.stdout
+    assert "qa.md" in result.stdout or "review.md" in result.stdout
+
+
 # --- T2: no snapshot / unreadable -> reuse query's named errors --------------
 
 
@@ -488,3 +499,138 @@ def test_run_render_byte_identical_on_repeated_render_of_same_snapshot(built_rep
     second_text = (built_repo / STORE_DIRNAME / REPORT_FILENAME).read_text(encoding="utf-8")
 
     assert first_text == second_text
+
+
+# --- measurement-honesty T2: artifact_probe renders on every report (AC-4.6) -
+
+
+def test_artifact_probe_provenance_renders_even_with_no_spark_present(built_repo: Path):
+    """AC-2.5/AC-4.6: the probe result is sealed and rendered on *every* build,
+    not only when a metric is affected — otherwise "no caveat" is indistinguishable
+    from "the check never ran" (the same invisible-disclosure failure this
+    feature exists to fix, one layer up)."""
+    snapshot = build_snapshot(built_repo, as_of="2026-07-29")  # built_repo has no .spark/
+    text = render_html(snapshot.to_dict())
+    assert "artifact_probe.outcome" in text
+    assert "absent" in text
+
+
+def test_artifact_probe_provenance_renders_when_spark_is_present(built_repo: Path):
+    feature_dir = built_repo / ".spark" / "some-feature"
+    feature_dir.mkdir(parents=True)
+    (feature_dir / "qa.md").write_text("x", encoding="utf-8")
+
+    snapshot = build_snapshot(built_repo, as_of="2026-07-29")
+    text = render_html(snapshot.to_dict())
+    assert "artifact_probe.matched_filenames" in text
+    assert "qa.md" in text
+
+
+def test_render_provenance_generic_tail_does_not_reintroduce_policy_versions():
+    """Guards the T2 mitigation directly: policy_versions is a known top-level
+    key deliberately excluded from the generic tail, so genericizing the row
+    generation must not start rendering it (existing byte output unchanged)."""
+    text = render_html(_snapshot())  # default provenance has policy_versions: None
+    assert "policy_versions" not in text
+
+
+# --- measurement-honesty T4: top-band evidence caveat (AC-4.1..4.5) ---------
+
+
+def _evidence_absent_metric(metric_id: str, n: int, reason: str = "no evidence found") -> dict:
+    return {"metric_id": metric_id, "metric_version": "2.0.0", "value": None, "reason": reason, "n": n}
+
+
+def _denominator_absent_metric(metric_id: str) -> dict:
+    return {"metric_id": metric_id, "metric_version": "2.0.0", "value": None, "reason": "no nodes found", "n": 0}
+
+
+def _computed_metric(metric_id: str, value=1.0, n=5) -> dict:
+    return {"metric_id": metric_id, "metric_version": "2.0.0", "value": value, "reason": None, "n": n}
+
+
+def test_caveat_triggers_on_evidence_absent_null_with_truthy_n():
+    metrics = [_evidence_absent_metric("TRC-002", n=41), _computed_metric("TRC-001")]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "NOT COMPUTED" in text
+    assert "TRC-002" in text.split("NOT COMPUTED")[1].split("</p>")[0]
+
+
+def test_caveat_states_count_against_total_first():
+    metrics = [_evidence_absent_metric("TRC-002", n=41), _evidence_absent_metric("TRC-004-unverified-acs", n=41), _computed_metric("TRC-001")]
+    text = render_html(_snapshot(metrics=metrics))
+    caveat = text.split("NOT COMPUTED")[1].split("</p>")[0]
+    assert "2 of 3 metrics" in caveat
+
+
+def test_caveat_names_affected_ids_and_points_to_metrics_table():
+    metrics = [_evidence_absent_metric("TRC-002", n=41), _computed_metric("TRC-001")]
+    text = render_html(_snapshot(metrics=metrics))
+    caveat = text.split("NOT COMPUTED")[1].split("</p>")[0]
+    assert "TRC-002" in caveat
+    assert "See the Metrics table below" in caveat
+    # the full reason string is not in the top band — that's the row's job (AC-4.2)
+    assert "no evidence found" not in caveat
+
+
+def test_caveat_does_not_trigger_on_denominator_absent_null_fresh_repo_screen():
+    """AC-4.1(i)/AC-4.3: an all-null fresh-repo snapshot (every null is
+    denominator-absent, n=0) must render no caveat — identical to the empty
+    state /demo-day already accepted as reading correctly."""
+    metrics = [_denominator_absent_metric("TRC-001"), _denominator_absent_metric("TRC-002")]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "NOT COMPUTED" not in text
+
+
+def test_no_caveat_when_no_metric_is_evidence_absent():
+    metrics = [_computed_metric("TRC-001"), _computed_metric("TRC-002")]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "NOT COMPUTED" not in text
+
+
+def test_empty_notice_still_renders_when_caveat_does_not_fire():
+    """AC-4.3's carve-out: the fresh-repo case renders no evidence caveat but
+    must still render snapshot-report's own empty-facts notice."""
+    metrics = [_denominator_absent_metric("TRC-001")]
+    text = render_html(_snapshot(facts=[], metrics=metrics))
+    assert "NOT COMPUTED" not in text
+    assert 'class="empty-notice"' in text
+
+
+def test_caveat_byte_offset_order_stale_then_caveat_then_provenance():
+    metrics = [_evidence_absent_metric("TRC-002", n=41)]
+    text = render_html(_snapshot(provenance=_STALE_PROVENANCE, metrics=metrics))
+    pos_stale = text.index('<p class="stale-cue">STALE')
+    pos_caveat = text.index('<p class="stale-cue">NOT COMPUTED')
+    pos_provenance = text.index('id="provenance"')
+    assert pos_stale < pos_caveat < pos_provenance
+
+
+def test_caveat_placed_before_provenance_even_without_staleness():
+    metrics = [_evidence_absent_metric("TRC-002", n=41)]
+    text = render_html(_snapshot(metrics=metrics))  # not stale — no stale cue at all
+    assert "STALE" not in text
+    pos_caveat = text.index('<p class="stale-cue">NOT COMPUTED')
+    pos_provenance = text.index('id="provenance"')
+    assert pos_caveat < pos_provenance
+
+
+def test_caveat_row_level_reason_still_shown_ac_4_2_untouched():
+    metrics = [_evidence_absent_metric("TRC-002", n=41, reason="no verifies edges found (0 of 41)")]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "Not computed: no verifies edges found (0 of 41)" in text
+
+
+def test_hostile_metric_id_in_caveat_is_escaped():
+    metrics = [_evidence_absent_metric(_HOSTILE, n=1)]
+    text = render_html(_snapshot(metrics=metrics))  # must not raise
+    caveat = text.split("NOT COMPUTED")[1].split("</p>")[0]
+    assert "<script>alert(1)</script>" not in caveat
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in caveat
+
+
+def test_caveat_present_page_still_has_no_javascript_or_external_refs():
+    metrics = [_evidence_absent_metric("TRC-002", n=41)]
+    text = render_html(_snapshot(metrics=metrics))
+    assert not _EXTERNAL_REF_PATTERN.search(text)
+    assert "<script>" not in text

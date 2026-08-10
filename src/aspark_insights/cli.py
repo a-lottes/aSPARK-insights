@@ -39,7 +39,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p_build.add_argument(
         "--repo", default=".",
         help="Repo root to read the graph from (default: .). Also where .aspark-insights/ "
-             "derived state is written, unless --output redirects it.",
+             "derived state is written, unless --output redirects it. Also read (never "
+             "written): <repo>/.spark/*/{qa.md,review.md} presence, to disclose whether an "
+             "absent-evidence metric is unmeasured because nothing happened or because the "
+             "graph's parser never recognized the artifact filenames.",
     )
     p_build.add_argument(
         "--output", default=None,

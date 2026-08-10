@@ -74,6 +74,32 @@ def test_verify_wrong_shape_json_exits_1_with_named_error_not_a_traceback(tmp_pa
     assert "Traceback" not in result.stderr
 
 
+def test_verify_against_a_pre_measurement_honesty_snapshot_is_an_expected_mismatch(built_repo: Path):
+    """AC-5.4: a snapshot built before this feature's version bump legitimately
+    mismatches on re-verify — the metric definitions it was built against no
+    longer exist (TRC-002 v1.0.0 was replaced, never left registered alongside
+    v2.0.0, AC-5.2). This is the intended disclosure (spec A4), not a bug to
+    suppress: exit 1, the existing named `verify_mismatch` error, no traceback."""
+    build = _run_cli(built_repo, "build", "--as-of", "2026-07-29")
+    assert build.returncode == 0, build.stderr
+    path = Path(snapshot_path(built_repo, "2026-07-29"))
+
+    data = json.loads(path.read_text())
+    # Roll the shape back to what a pre-release build would have written:
+    # TRC-002's old (fabricated-zero-capable) version, and no artifact_probe
+    # field in provenance at all — both real pre-this-feature facts.
+    for metric in data["metrics"]:
+        if metric["metric_id"] == "TRC-002":
+            metric["metric_version"] = "1.0.0"
+    data["provenance"].pop("artifact_probe", None)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    result = _run_cli(built_repo, "verify", str(path))
+    assert result.returncode == 1
+    assert "verify_mismatch" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_verify_without_matching_repo_hints_at_repo_flag(built_repo: Path, tmp_path: Path):
     """B4: omitting/mis-setting --repo must not read as 'you never ran build'."""
     build = _run_cli(built_repo, "build", "--as-of", "2026-07-29")
