@@ -247,16 +247,16 @@ def test_facts_table_sorted_by_subject_kind_subject_id_predicate():
     assert positions == sorted(positions)
 
 
-def test_metrics_table_sorted_by_metric_id_then_version():
+def test_metrics_scorecard_sorted_by_metric_id_then_version():
     metrics = [
         {"metric_id": "TRC-002", "metric_version": "1.0.0", "value": 1, "reason": None, "n": 5},
         {"metric_id": "TRC-001", "metric_version": "2.0.0", "value": 2, "reason": None, "n": 5},
         {"metric_id": "TRC-001", "metric_version": "1.0.0", "value": 3, "reason": None, "n": 5},
     ]
     text = render_html(_snapshot(metrics=metrics))
-    pos_trc001_v1 = text.index("TRC-001</td><td>1.0.0")
-    pos_trc001_v2 = text.index("TRC-001</td><td>2.0.0")
-    pos_trc002 = text.index("TRC-002")
+    pos_trc001_v1 = text.index("TRC-001 &middot; v1.0.0")
+    pos_trc001_v2 = text.index("TRC-001 &middot; v2.0.0")
+    pos_trc002 = text.index("TRC-002 &middot; v1.0.0")
     assert pos_trc001_v1 < pos_trc001_v2 < pos_trc002
 
 
@@ -279,9 +279,9 @@ def test_tables_have_scope_col_headers_and_captions():
     text = render_html(_snapshot(
         facts=[{"subject_kind": "code_artifact", "subject_id": "a", "predicate": "p", "value": 1}],
     ))
-    assert text.count('<th scope="col">') >= 2
-    assert "<caption>Metrics</caption>" in text
+    assert text.count('<th scope="col">') >= 2  # Facts + Provenance tables
     assert "<caption>Facts</caption>" in text
+    assert "<caption>Provenance</caption>" in text
 
 
 # --- T4: provenance verbatim, section order, two-place stale cue -----------
@@ -354,31 +354,212 @@ def test_h2_headings_present_for_provenance_metrics_facts():
 # --- T5: honest values — n beside value, distinctly-shaped null, empty state -
 
 
-def test_computed_value_shows_value_together_with_n():
+def test_computed_share_metric_shows_percent_together_with_n():
+    """TRC-003 is a known "share" metric (a 0..1 fraction) — the scorecard
+    shows it as a rounded percent, not the raw float, with its n alongside
+    in the same value block, never split across unrelated elements."""
     metrics = [{"metric_id": "TRC-003", "metric_version": "1.0.0", "value": 0.875, "reason": None, "n": 8}]
     text = render_html(_snapshot(metrics=metrics))
-    assert "0.875" in text
-    assert "(n=8)" in text
-    # both appear in the same cell, not split across unrelated columns
-    assert "0.875 (n=8)" in text
+    assert '<p class="metric-value">88% <span class="metric-n">(n=8)</span></p>' in text
 
 
 def test_computed_value_with_n_none_never_shows_a_bare_value():
     """F2: the model permits value != None with n == None; never a bare value
-    with no n-related marker at all, even in this theoretical case."""
+    with no n-related marker at all, even in this theoretical case. "M" is
+    not a known metric_id, so it falls back to its raw value (no percent)."""
     metrics = [{"metric_id": "M", "metric_version": "1.0.0", "value": 42, "reason": None, "n": None}]
     text = render_html(_snapshot(metrics=metrics))
-    assert "42 (n unavailable)" in text
-    assert "<td>42</td>" not in text  # never a bare value cell
+    assert "42" in text
+    assert "(n unavailable)" in text
+    assert '<p class="metric-value">42</p>' not in text  # never a bare value, no n-marker
+
+
+# --- review B1/B2/M1-M7: the fragile new branches (previously zero coverage) -
+
+
+def _metric_value_block(text: str, metric_id: str) -> str:
+    """The rendered `<p class="metric-value">...</p>` for one metric's card —
+    scoped so assertions never accidentally match the static `<style>` block
+    (which always contains literal `100%`, e.g. `.metric-bar-fill { height:
+    100%; }`, regardless of any metric's data)."""
+    marker = f'{metric_id} &middot;'
+    card_start = text.rindex('<div class="metric-card', 0, text.index(marker))
+    card = text[card_start:text.index("</div>", text.index(marker))]
+    value_start = card.index('<p class="metric-value">')
+    return card[value_start:card.index("</p>", value_start) + 4]
+
+
+def test_count_metric_shows_the_count_never_a_substituted_percentage():
+    """review M1: TRC-004-orphan-tasks is a "count" metric — its raw count
+    must remain the displayed value; the ratio drives the bar's width only,
+    it never replaces the number shown in the value line itself."""
+    metrics = [{"metric_id": "TRC-004-orphan-tasks", "metric_version": "1.0.0", "value": 3, "reason": None, "n": 24}]
+    text = render_html(_snapshot(metrics=metrics))
+    value_block = _metric_value_block(text, "TRC-004-orphan-tasks")
+    assert value_block == '<p class="metric-value">3 of 24 <span class="metric-n">(n=24)</span></p>'
+    assert "12%" not in value_block  # the ratio must never appear as if it were the value
+
+
+def test_share_above_one_falls_back_to_raw_value_no_bar():
+    """review M2: an out-of-range share (a broken input, not a real fraction)
+    is never clamped into a plausible-looking percentage — it falls back to
+    the raw value and drops the bar entirely."""
+    metrics = [{"metric_id": "TRC-001", "metric_version": "1.0.0", "value": 1.7, "reason": None, "n": 4}]
+    text = render_html(_snapshot(metrics=metrics))
+    value_block = _metric_value_block(text, "TRC-001")
+    assert "%" not in value_block
+    assert "1.7" in value_block
+    assert '<div class="metric-bar-fill"' not in text  # no bar rendered anywhere for this single-metric page
+
+
+def test_count_exceeding_its_own_n_falls_back_to_raw_no_bar():
+    """review M1/M2: a count greater than its own n is nonsensical — never
+    silently pinned to 100%."""
+    metrics = [{"metric_id": "TRC-004-orphan-tasks", "metric_version": "1.0.0", "value": 50, "reason": None, "n": 4}]
+    text = render_html(_snapshot(metrics=metrics))
+    value_block = _metric_value_block(text, "TRC-004-orphan-tasks")
+    assert "%" not in value_block
+    assert "50" in value_block
+    assert '<div class="metric-bar-fill"' not in text  # no bar rendered anywhere for this single-metric page
+
+
+def test_tiny_nonzero_share_never_rounds_away_to_a_false_zero():
+    """review M2: 1-of-250 must never render as the same "0%" a real, honest
+    zero would show — that would assert something false and erase the
+    distinction between "almost none" and "none"."""
+    metrics = [{"metric_id": "TRC-002", "metric_version": "1.0.0", "value": 0.004, "reason": None, "n": 250}]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "&lt;1%" in text
+    assert '>0%<' not in text and '">0%' not in text
+
+
+def test_confidence_mix_null_string_tier_does_not_crash_the_report():
+    """review M3: a non-numeric tier value must degrade honestly (no mix
+    rendered, cards render instead), never raise out of render_html — the
+    exact class of defect the last cycle's F1 fix hardened against."""
+    metrics = [
+        {"metric_id": "TRC-005-declared", "metric_version": "1.0.0", "value": "not-a-number", "reason": None, "n": 4},
+        {"metric_id": "TRC-005-extracted", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 4},
+        {"metric_id": "TRC-005-inferred", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 4},
+    ]
+    text = render_html(_snapshot(metrics=metrics))  # must not raise
+    assert '<div class="confidence-mix">' not in text
+    assert "TRC-005-declared" in text  # falls back to its own card
+
+
+def test_confidence_mix_requires_all_three_tiers_present():
+    """review M5: two of three tiers must not render a mix that misrepresents
+    the absent third as untraced remainder."""
+    metrics = [
+        {"metric_id": "TRC-005-declared", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 4},
+        {"metric_id": "TRC-005-extracted", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 4},
+    ]
+    text = render_html(_snapshot(metrics=metrics))
+    assert '<div class="confidence-mix">' not in text
+
+
+def test_confidence_mix_requires_matching_n_across_tiers():
+    """review M4: tiers with differing n describe different populations —
+    folding them into one bar with one n would misattribute the denominator."""
+    metrics = [
+        {"metric_id": "TRC-005-declared", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 4},
+        {"metric_id": "TRC-005-extracted", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 99},
+        {"metric_id": "TRC-005-inferred", "metric_version": "1.0.0", "value": 0.0, "reason": None, "n": 4},
+    ]
+    text = render_html(_snapshot(metrics=metrics))
+    assert '<div class="confidence-mix">' not in text
+
+
+def test_confidence_mix_null_n_is_not_rendered_as_literal_none():
+    """review M4: an all-null n must never reach the page as the word 'None'."""
+    metrics = [
+        {"metric_id": "TRC-005-declared", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": None},
+        {"metric_id": "TRC-005-extracted", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": None},
+        {"metric_id": "TRC-005-inferred", "metric_version": "1.0.0", "value": 0.0, "reason": None, "n": None},
+    ]
+    text = render_html(_snapshot(metrics=metrics))
+    assert '<div class="confidence-mix">' not in text
+    assert "of None fully-traced" not in text
+
+
+def test_confidence_mix_zero_n_is_not_a_real_population_to_share():
+    """N1 (re-verification pass): n=0 must be treated the same as n=None — a
+    share "of 0 fully-traced stories" is a population that does not exist,
+    not a real mix to render. The real registry emits null, not a share, at
+    n=0 (AC-1.4's precedence), so this guards a broken-input path directly,
+    the same reachability class M2/M4 already defend."""
+    metrics = [
+        {"metric_id": "TRC-005-declared", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 0},
+        {"metric_id": "TRC-005-extracted", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 0},
+        {"metric_id": "TRC-005-inferred", "metric_version": "1.0.0", "value": 0.0, "reason": None, "n": 0},
+    ]
+    text = render_html(_snapshot(metrics=metrics))
+    assert '<div class="confidence-mix">' not in text
+    assert "of 0 fully-traced" not in text
+
+
+def test_duplicate_metric_id_across_versions_both_reach_the_page():
+    """review M6: two versions of one metric_id (a legitimate registry shape,
+    exercised elsewhere by TRC-001 v1/v2) must not both vanish when one
+    version happens to be a confidence tier folded into the mix bar."""
+    metrics = [
+        {"metric_id": "TRC-005-declared", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 4},
+        {"metric_id": "TRC-005-declared", "metric_version": "2.0.0", "value": 0.5, "reason": None, "n": 4},
+        {"metric_id": "TRC-005-extracted", "metric_version": "1.0.0", "value": 0.5, "reason": None, "n": 4},
+        {"metric_id": "TRC-005-inferred", "metric_version": "1.0.0", "value": 0.0, "reason": None, "n": 4},
+    ]
+    text = render_html(_snapshot(metrics=metrics))
+    metrics_section = text.split('id="metrics"')[1].split("</section>")[0]
+    # The table (B1/B2) is guaranteed to carry every metric regardless of
+    # folding — this is the assertion that actually exercises M6.
+    assert "<td>TRC-005-declared</td><td>1.0.0</td>" in metrics_section
+    assert "<td>TRC-005-declared</td><td>2.0.0</td>" in metrics_section
+    # v1.0.0 was not consumed by the mix fold, so it also keeps its own card.
+    assert "TRC-005-declared &middot; v1.0.0" in metrics_section
+
+
+def test_full_metrics_table_present_alongside_the_scorecard():
+    """review B1 (constitution §4 / snapshot-report AC-1.2): the cards are an
+    addition, never a replacement — every metric still appears in a real
+    <table> with <th scope="col"> and a <caption>."""
+    metrics = [{"metric_id": "TRC-003", "metric_version": "1.0.0", "value": 0.875, "reason": None, "n": 8}]
+    text = render_html(_snapshot(metrics=metrics))
+    metrics_section = text.split('id="metrics"')[1].split("</section>")[0]
+    assert "<caption>Metrics</caption>" in metrics_section
+    assert '<th scope="col">Metric ID</th>' in metrics_section
+    assert "<td>TRC-003</td>" in metrics_section
+
+
+def test_all_eight_family_metrics_reach_the_page_none_dropped_by_folding():
+    """review B2: the exact live-repo shape (8 metrics, 3 folded into the
+    confidence mix) must still show all 8 ids in the full table, matching the
+    summary's own count — reproduces the bug found against this repo's real
+    output before the fix."""
+    metrics = [
+        {"metric_id": "TRC-001", "metric_version": "2.0.0", "value": 1.0, "reason": None, "n": 14},
+        {"metric_id": "TRC-002", "metric_version": "2.0.0", "value": None, "reason": "no evidence", "n": 41},
+        {"metric_id": "TRC-003", "metric_version": "2.0.0", "value": 0.875, "reason": None, "n": 24},
+        {"metric_id": "TRC-004-orphan-tasks", "metric_version": "2.0.0", "value": 0, "reason": None, "n": 24},
+        {"metric_id": "TRC-004-unverified-acs", "metric_version": "2.0.0", "value": None, "reason": "no evidence", "n": 41},
+        {"metric_id": "TRC-005-declared", "metric_version": "1.0.0", "value": 1.0, "reason": None, "n": 13},
+        {"metric_id": "TRC-005-extracted", "metric_version": "1.0.0", "value": 0.0, "reason": None, "n": 13},
+        {"metric_id": "TRC-005-inferred", "metric_version": "1.0.0", "value": 0.0, "reason": None, "n": 13},
+    ]
+    text = render_html(_snapshot(metrics=metrics))
+    assert "<li><strong>Metrics:</strong> 8</li>" in text
+    metrics_section = text.split('id="metrics"')[1].split("</section>")[0]
+    for m in metrics:
+        assert f"<td>{m['metric_id']}</td><td>{m['metric_version']}</td>" in metrics_section
 
 
 def test_null_value_shows_reason_with_distinct_shape_not_blank():
     metrics = [{"metric_id": "TRC-002", "metric_version": "1.0.0", "value": None, "reason": "no Story nodes found in graph", "n": None}]
     text = render_html(_snapshot(metrics=metrics))
     assert "no Story nodes found in graph" in text
-    assert 'class="null-value"' in text
-    assert "Not computed:" in text
-    assert "<td></td>" not in text  # never a blank cell
+    assert "metric-card--null" in text
+    assert "metric-value--null" in text
+    assert "Not computed" in text  # measurement-honesty C14: reuse existing wording, not a new synonym
+    assert '<p class="metric-reason"></p>' not in text  # never a blank reason
 
 
 def test_all_null_dogfood_snapshot_shows_real_reasons_and_facts_empty_notice(built_repo: Path):
@@ -414,7 +595,7 @@ def test_summary_appears_directly_under_h1_as_distinct_figures_not_prose():
     assert text.count("<li>") >= 4
 
 
-def test_summary_counts_match_rendered_table_row_counts():
+def test_summary_counts_match_rendered_card_and_fact_row_counts():
     facts = [
         {"subject_kind": "code_artifact", "subject_id": f"id-{i}", "predicate": "p", "value": i}
         for i in range(3)
@@ -431,8 +612,7 @@ def test_summary_counts_match_rendered_table_row_counts():
     assert "<li><strong>Null:</strong> 2</li>" in text
     metrics_section = text.split('id="metrics"')[1].split("</section>")[0]
     facts_section = text.split('id="facts"')[1].split("</section>")[0]
-    assert metrics_section.count("<tbody>") == 1
-    assert metrics_section.count("<tr>") == 1 + 3  # thead + 3 metric rows
+    assert metrics_section.count('<div class="metric-card') == 3  # one card per metric, none dropped
     assert facts_section.count("<tr>") == 1 + 3  # thead + 3 fact rows
 
 
@@ -616,9 +796,17 @@ def test_caveat_placed_before_provenance_even_without_staleness():
 
 
 def test_caveat_row_level_reason_still_shown_ac_4_2_untouched():
+    """AC-4.2: the affected metric's own card still shows its full reason —
+    the top-band caveat is additive, never a replacement. The scorecard
+    shows this as "Not computed" plus the reason as its own paragraph on the
+    card, and the same reason still appears in the full metrics table below
+    (review B1/B2) — the guarantee (the full reason is always visible on the
+    metric itself) is unchanged, now doubly so."""
     metrics = [_evidence_absent_metric("TRC-002", n=41, reason="no verifies edges found (0 of 41)")]
     text = render_html(_snapshot(metrics=metrics))
-    assert "Not computed: no verifies edges found (0 of 41)" in text
+    assert "Not computed" in text
+    assert '<p class="metric-reason">no verifies edges found (0 of 41)</p>' in text
+    assert "Not computed: no verifies edges found (0 of 41)" in text  # the full table row
 
 
 def test_hostile_metric_id_in_caveat_is_escaped():
