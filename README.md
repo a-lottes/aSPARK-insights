@@ -2,8 +2,9 @@
 
 > **Real, hand-verifiable engineering metrics computed from your repo's actual delivery graph — never a second-guessed number, never a fabricated one.**
 
-> **Project status: shipped at `v0.5.0` — real traceability coverage, a
-> self-contained HTML report, an MCP query tool, honest nulls throughout.**
+> **Project status: shipped at `v0.7.0` — real traceability coverage, a
+> self-contained HTML report, an MCP query tool, honest nulls throughout, and
+> a git-native mid-cycle board that needs no graph at all.**
 > You can build a snapshot today and get real Story→Task, AC→QA and Task→Code
 > coverage numbers, each with its own sample size, computed against
 > [aspark-graph](https://github.com/a-lottes/aSPARK-graph)'s facts, then render
@@ -11,10 +12,14 @@
 > and [Usage](#usage)). A metric whose underlying evidence never made it into
 > the graph — not "nothing happened", but "the graph never saw it" — reports an
 > honest `null` with a reason instead of a fabricated `0%` or `100%` (see
-> [Absent evidence vs. a real zero](#absent-evidence-vs-a-real-zero)). What's
-> still missing: flow/cycle-time metrics, architecture-health metrics, and
-> policy-derived compliance metrics — all future increments. Not yet on PyPI —
-> see [Install](#install) for the source-only setup.
+> [Absent evidence vs. a real zero](#absent-evidence-vs-a-real-zero)). Separately,
+> `insights board` answers "what's landed since the last release, what's in
+> flight" from local git alone — no graph, no `.spark/` — proving this tool runs
+> standalone against any git repo, not only the aSPARK family (see
+> [Mid-cycle board](#mid-cycle-board)). What's still missing: flow/cycle-time
+> metrics, architecture-health metrics, and policy-derived compliance metrics —
+> all future increments. Not yet on PyPI — see [Install](#install) for the
+> source-only setup.
 
 ---
 
@@ -129,6 +134,51 @@ uv run insights serve --repo ../aSPARK-graph --output /tmp/insights-scratch
 
 The repo/output location is fixed once at launch — `query` takes **no arguments**, so it can never be pointed anywhere else per call, and it never triggers a fresh `build`. See [SECURITY.md](SECURITY.md) for the trust boundary and non-guarantees.
 
+### Mid-cycle board
+
+`insights board` is a **separate, standalone** surface — it never calls
+`GraphPort` and never reads `.spark/`. It runs against any git repo, built or
+unbuilt, aSPARK-flavored or not:
+
+```bash
+# JSON: commits/days since the last tag, work-type mix, local branches
+uv run insights board --as-of 2026-08-13 --repo /path/to/any/git/repo
+
+# HTML: the same data as one self-contained offline page
+uv run insights board --as-of 2026-08-13 --repo /path/to/any/git/repo \
+                       --format html --output /tmp/board-scratch
+# writes /tmp/board-scratch/.aspark-insights/board.html
+```
+
+This is the documented **ADR-2 interim fallback**: time is properly a graph
+fact once the sibling `aspark-graph` tool ships release-node data, and this
+board yields to that once it exists. Until then, every field this command
+produces carries a `source: "git-interim"` marker (rendered as an `INTERIM
+(git-native)` notice at the top of the HTML page too) — a value from `board`
+is never mistaken for a graph-sourced fact, today or later.
+
+Same non-negotiables as everything else in this project:
+
+- **No person-level data, ever.** No author, committer, email, or commit
+  trailer (`Co-Authored-By`, `Signed-off-by`) reaches JSON or HTML — commit
+  subjects are read for their leading type token only, never for identity.
+- **No invented number.** A repo with no tags reports `commits: null` with a
+  reason, not a fabricated `0`; a resolved tag with genuinely zero commits
+  since it reports a real `0`, never confused with the null case.
+- **Work-type mix is honestly degraded, not guessed.** Each commit subject's
+  leading [Conventional Commit](https://www.conventionalcommits.org/) token —
+  `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `build`, `ci`, `perf`,
+  `style` — is classified; anything else is `unclassified`. If fewer than
+  **20%** of commits since the tag carry a recognized token, the whole
+  breakdown reports `null` with a reason instead of a misleading distribution
+  built from too few data points.
+- **Bounded, never silently truncated.** The commit list shows the most
+  recent 50 with an explicit "showing N of M" note when there are more; the
+  exact total count is always reported regardless.
+- **Shallow clones disclose themselves.** `shallow: true` (and the HTML's "at
+  least N commits…" wording) means the clone's own history may not go back
+  far enough for the count to be exhaustive.
+
 ## Project Status
 
 - [x] Package skeleton, `GraphPort` seam to `aspark-graph`, core Fact/Snapshot/
@@ -142,6 +192,12 @@ The repo/output location is fixed once at launch — `query` takes **no argument
 - [x] Measurement honesty — a repo-wide-absent evidence kind reports `null`
       with a reason (disclosing a real `.spark/` artifact if one exists)
       instead of a fabricated `0%`/`100%`, registry-wide (`v0.5.0`)
+- [x] Snapshot-report scorecard redesign — per-metric cards, a folded
+      confidence-mix bar, the full metrics table always retained beneath
+      them (`v0.6.0`)
+- [x] Git-native mid-cycle board — `insights board`, a standalone surface
+      needing no graph and no `.spark/`: commits/days since the last tag,
+      work-type mix, local branches, JSON or self-contained HTML (`v0.7.0`)
 - [ ] Flow/cycle-time metrics — blocked on `aspark-graph` shipping
       release/commit time data
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene
@@ -156,7 +212,7 @@ The repo/output location is fixed once at launch — `query` takes **no argument
 | **[aSPARK Core](https://github.com/a-lottes/aSPARK)** | shipped, `v0.4.0` | Delivery process, roles, gates, templates |
 | **[aspark-graph](https://github.com/a-lottes/aSPARK-graph)** | shipped, `v0.7.0` (on PyPI) | Traceability and engineering knowledge graph |
 | **[aSPARK-policy](https://github.com/a-lottes/aSPARK-policy)** | shipped, `v0.2.0` (format + catalog; enforcement open) | Enterprise engineering standards and governance |
-| **aSPARK-insights** (this repo) | shipped, `v0.5.0` (traceability metrics, HTML report, MCP server, honest nulls) | Engineering metrics and management dashboards |
+| **aSPARK-insights** (this repo) | shipped, `v0.7.0` (traceability metrics, HTML report, MCP server, honest nulls, standalone git board) | Engineering metrics and management dashboards |
 
 The graph delivers fact-queries; insights delivers the analytics product —
 versioned metric definitions, time series over snapshots, joins, dashboards —

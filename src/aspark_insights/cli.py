@@ -14,6 +14,7 @@ from pathlib import Path
 
 from aspark_insights.build import build_snapshot
 from aspark_insights.errors import GraphNotBuiltError, InsightsError, VerifyMismatchError
+from aspark_insights.gitboard.board import build_board
 from aspark_insights.query import run_query
 from aspark_insights.render import run_render
 from aspark_insights.serialization import canonical_json
@@ -95,6 +96,20 @@ def _build_parser() -> argparse.ArgumentParser:
     p_verify.add_argument("snapshot")
     p_verify.add_argument("--repo", default=".", help="Repo root to recompute against (default: .)")
 
+    p_board = sub.add_parser(
+        "board",
+        help="Mid-cycle status from local git alone — commits/days since the last tag, "
+             "work-type mix, local branches. Never reads the graph or .spark/ (source: "
+             "git-interim, the documented ADR-2 fallback).",
+    )
+    p_board.add_argument("--as-of", required=True, help="Date this board represents, YYYY-MM-DD (an input, never the wall clock).")
+    p_board.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads only local git plumbing — no graph, no .spark/.")
+    p_board.add_argument(
+        "--output", default=None,
+        help="Where to write board.html for --format html (default: --repo). Ignored for --format json, which writes nothing.",
+    )
+    p_board.add_argument("--format", choices=("json", "html"), default="json", help="Output format (default: json).")
+
     return parser
 
 
@@ -115,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_diff(args)
         if args.command == "verify":
             return _cmd_verify(args)
+        if args.command == "board":
+            return _cmd_board(args)
         parser.error(f"command {args.command!r} not wired up yet")
         return 2  # pragma: no cover - argparse.error() exits before this
     except InsightsError as exc:
@@ -202,6 +219,20 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     if not matches:
         raise VerifyMismatchError(f"recomputed snapshot does not byte-match stored file: {path}")
     print(canonical_json({"snapshot": str(path), "matches": True}), end="")
+    return 0
+
+
+def _cmd_board(args: argparse.Namespace) -> int:
+    board = build_board(args.repo, args.as_of)
+    if args.format == "json":
+        print(canonical_json(board), end="")
+        return 0
+    # --format html: render the self-contained board.html and report its path
+    # as JSON on stdout (the write location honors --output, defaulting to --repo).
+    from aspark_insights.gitboard.report import run_board_report
+
+    path = run_board_report(board, args.output or args.repo)
+    print(canonical_json({"report": str(path)}), end="")
     return 0
 
 

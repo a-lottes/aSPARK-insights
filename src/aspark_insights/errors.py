@@ -60,3 +60,29 @@ class GraphUnreadableError(InsightsError):
     """The graph's own store exists but is malformed (bad JSON or bad shape)."""
 
     reason = "graph_unreadable"
+
+
+class GitUnavailableError(InsightsError):
+    """`git` itself is unusable — not installed, not on PATH, timed out, or an
+    unexpected nonzero exit at a call site that assumed a valid repo. Distinct
+    from `NotAGitRepoError`: this is about the tool, not the target directory.
+    """
+
+    reason = "git_unavailable"
+
+
+class NotAGitRepoError(InsightsError):
+    """`--repo` is not a git working tree or bare repo — empty string, `../`
+    traversal, an absolute path to a non-repo, or a directory with a corrupt
+    `.git`. `git rev-parse --git-dir`'s own nonzero exit is the sole authority
+    for this; never hand-parsed."""
+
+    reason = "not_a_git_repo"
+
+
+class BoardUnreadableError(InsightsError):
+    """A board dict passed to the git-board HTML renderer has an unexpected
+    shape — mirrors `SnapshotUnreadableError`'s "never a raw traceback on
+    malformed input" guarantee for this feature's own data shape."""
+
+    reason = "board_unreadable"
