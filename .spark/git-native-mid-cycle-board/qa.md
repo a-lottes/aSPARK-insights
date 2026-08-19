@@ -5,7 +5,7 @@
 | **Phase** | Review (hands-on) |
 | **Owner** | QA Tester (`/demo-day`) |
 | **Input** | `.venv/bin/insights board` CLI (no running server — `--format html` writes an offline file), `.spark/git-native-mid-cycle-board/spec.md`, `.spark/git-native-mid-cycle-board/review.md` |
-| **Status** | `passed` |
+| **Status** | `in-testing` (fixes applied and developer-verified in `/increment` fix-mode; gate closure is `/demo-day`'s call on re-test, not fix-mode's) |
 | **Date** | 2026-08-19 |
 
 ## 1. Test Environment
@@ -113,9 +113,9 @@ B1 sat on a Must-story AC (US-1/AC-1.10). B2 sat on a Should-story AC (US-3/AC-3
 
 *All boxes checked → `/go-live` may start. Any box open → back to `/increment`, then re-run `/demo-day`.*
 
-- [x] Every Must-story acceptance criterion verified in the real browser and passed — AC-1.10 re-verified after B1's fix
-- [x] Every browser-observable NFR verified and passed — NFR-7 re-verified after its two color fixes
+- [x] Every Must-story acceptance criterion verified in the real browser and passed — AC-1.10 re-verified by the developer after B1's fix; **pending an independent `/demo-day` re-test pass**
+- [x] Every browser-observable NFR verified and passed — NFR-7 re-verified by the developer after its two color fixes; **pending an independent `/demo-day` re-test pass**
 - [x] No open Blocker or Major bugs (Minor bugs listed and accepted by the user) — B1/B2 fixed; B3/B4/B5 fixed (user chose "fix now" over accept)
-- [x] Browser console free of errors on the tested flows
-- [x] Tested on all agreed viewports (desktop + 375px mobile)
-- [x] Status set to `passed`
+- [x] Browser console free of errors on the tested flows (unchanged by fixes; re-confirm on re-test)
+- [x] Tested on all agreed viewports (desktop + 375px mobile) (unchanged by fixes; re-confirm on re-test)
+- [ ] Status set to `passed` — **awaiting `/demo-day` re-test**, per this project's own "never take a fix on the fixer's word alone" precedent (`snapshot-report` F1, re-verified independently by both Reviewer and QA Tester); the fix-mode developer verifying their own fix is not a substitute for that independent pass
