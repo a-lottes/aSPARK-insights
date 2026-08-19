@@ -2,9 +2,10 @@
 
 > **Real, hand-verifiable engineering metrics computed from your repo's actual delivery graph — never a second-guessed number, never a fabricated one.**
 
-> **Project status: shipped at `v0.7.0` — real traceability coverage, a
-> self-contained HTML report, an MCP query tool, honest nulls throughout, and
-> a git-native mid-cycle board that needs no graph at all.**
+> **Project status: shipped at `v0.8.0` — real traceability coverage, a
+> self-contained HTML report, an MCP query tool, honest nulls throughout, a
+> git-native mid-cycle board, and a release board that maps every git tag to
+> the SPARK features that shipped in it.**
 > You can build a snapshot today and get real Story→Task, AC→QA and Task→Code
 > coverage numbers, each with its own sample size, computed against
 > [aspark-graph](https://github.com/a-lottes/aSPARK-graph)'s facts, then render
@@ -16,7 +17,9 @@
 > `insights board` answers "what's landed since the last release, what's in
 > flight" from local git alone — no graph, no `.spark/` — proving this tool runs
 > standalone against any git repo, not only the aSPARK family (see
-> [Mid-cycle board](#mid-cycle-board)). What's still missing: flow/cycle-time
+> [Mid-cycle board](#mid-cycle-board)), and `insights releases` maps every git
+> tag to the `.spark/` features that shipped in it (see
+> [Release board](#release-board)). What's still missing: flow/cycle-time
 > metrics, architecture-health metrics, and policy-derived compliance metrics —
 > all future increments. Not yet on PyPI — see [Install](#install) for the
 > source-only setup.
@@ -179,6 +182,39 @@ Same non-negotiables as everything else in this project:
   least N commits…" wording) means the clone's own history may not go back
   far enough for the count to be exhaustive.
 
+### Release board
+
+`insights releases` maps every real git tag — plus the open window since the
+latest one, as a distinguishable pseudo-release — to the `.spark/<feature>/`
+directories that shipped in it, unattributed commits, and each feature's own
+`spec`/`plan`/`review`/`qa`/`release` status:
+
+```bash
+uv run insights releases --as-of 2026-08-19 --repo /path/to/any/git/repo
+```
+
+Like `insights board`, this never reads the graph and never invents a
+release from a commit-message version string — a version only counts once
+it's an actual git tag; everything since the latest one (including a
+commit-message-only version like an unpushed `v0.6.0`) shows up in the
+trailing `tag: null` entry instead, whose own commit/branch/work-type
+figures are `insights board`'s own answer, reused verbatim, never
+recomputed a second way.
+
+- **A release can span more than one feature, and that's real, not a bug.**
+  This repo's own `v0.3.0` genuinely spans three `.spark/` directories.
+- **Membership is decided by changed paths, never by what a commit says
+  about itself.** A commit whose subject *names* a feature while touching
+  none of its files is never attributed to it by text matching — and a
+  feature's own trailing "record the release report" commit routinely lands
+  inside the *next* release's range, not the one it shipped under. Both are
+  disclosed as they really happened.
+- **An unparseable artifact status is `null` with a reason, never a guess.**
+  Only the first Markdown table in a `spec.md`/`plan.md`/`review.md`/`qa.md`/
+  `release.md` is ever read, and only for `Status`/`Date` — nothing else in
+  the file is parsed, so a status that can't be confidently read says so
+  honestly instead of pattern-matching around it.
+
 ## Project Status
 
 - [x] Package skeleton, `GraphPort` seam to `aspark-graph`, core Fact/Snapshot/
@@ -198,6 +234,10 @@ Same non-negotiables as everything else in this project:
 - [x] Git-native mid-cycle board — `insights board`, a standalone surface
       needing no graph and no `.spark/`: commits/days since the last tag,
       work-type mix, local branches, JSON or self-contained HTML (`v0.7.0`)
+- [x] Release board — `insights releases`, mapping every git tag (plus the
+      open window since the latest one) to the `.spark/<feature>/`
+      directories that shipped in it and each one's own artifact status
+      (`v0.8.0`)
 - [ ] Flow/cycle-time metrics — blocked on `aspark-graph` shipping
       release/commit time data
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene
@@ -212,7 +252,7 @@ Same non-negotiables as everything else in this project:
 | **[aSPARK Core](https://github.com/a-lottes/aSPARK)** | shipped, `v0.4.0` | Delivery process, roles, gates, templates |
 | **[aspark-graph](https://github.com/a-lottes/aSPARK-graph)** | shipped, `v0.7.0` (on PyPI) | Traceability and engineering knowledge graph |
 | **[aSPARK-policy](https://github.com/a-lottes/aSPARK-policy)** | shipped, `v0.2.0` (format + catalog; enforcement open) | Enterprise engineering standards and governance |
-| **aSPARK-insights** (this repo) | shipped, `v0.7.0` (traceability metrics, HTML report, MCP server, honest nulls, standalone git board) | Engineering metrics and management dashboards |
+| **aSPARK-insights** (this repo) | shipped, `v0.8.0` (traceability metrics, HTML report, MCP server, honest nulls, standalone git board, release board) | Engineering metrics and management dashboards |
 
 The graph delivers fact-queries; insights delivers the analytics product —
 versioned metric definitions, time series over snapshots, joins, dashboards —

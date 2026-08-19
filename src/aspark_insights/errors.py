@@ -86,3 +86,13 @@ class BoardUnreadableError(InsightsError):
     malformed input" guarantee for this feature's own data shape."""
 
     reason = "board_unreadable"
+
+
+class SparkDirUnreadableError(InsightsError):
+    """`.spark/` exists but could not be listed or read — e.g. a filesystem
+    permission error (review F1). Distinct from a missing `.spark/`, which
+    is not an error at all (`releasemap._list_feature_dirs` returns an
+    empty list), and distinct from `GitUnavailableError` — this is a
+    filesystem access failure, not a git one."""
+
+    reason = "spark_dir_unreadable"

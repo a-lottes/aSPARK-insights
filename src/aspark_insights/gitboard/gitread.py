@@ -150,6 +150,96 @@ def list_commits_since(repo_root: str, tag: str, max_count: int) -> list[dict]:
     return records
 
 
+def list_tags_topo_order(repo_root: str) -> list[dict]:
+    """Every tag (`git tag --list`), ordered oldest-first by its target
+    commit's position in `git rev-list --topo-order --reverse HEAD` — never
+    `--sort=creatordate`/`git tag --list`'s own default order, which would
+    be wall-clock/creation order, not topology (NFR-7). A tag whose target
+    commit is not reachable from `HEAD` has no position in that list; it is
+    appended last (stable relative order among unreachable tags), disclosed
+    via `reachable: False`, never silently dropped."""
+    try:
+        tag_names = [t for t in _run(repo_root, "tag", "--list").split("\n") if t]
+    except GitCommandFailed:
+        return []
+    if not tag_names:
+        return []
+
+    try:
+        topo = _run(repo_root, "rev-list", "--topo-order", "--reverse", "HEAD").split("\n")
+    except GitCommandFailed:
+        topo = []
+    position = {commit: i for i, commit in enumerate(topo)}
+    unreachable_position = len(topo)
+
+    entries = []
+    for name in tag_names:
+        try:
+            commit = _run(repo_root, "rev-list", "-n1", name)
+        except GitCommandFailed:
+            commit = None
+        reachable = commit is not None and commit in position
+        entries.append({
+            "tag": name,
+            "commit": commit,
+            "reachable": reachable,
+            "_position": position[commit] if reachable else unreachable_position,
+        })
+    entries.sort(key=lambda e: e["_position"])
+    for e in entries:
+        del e["_position"]
+    return entries
+
+
+def list_commits_in_range(repo_root: str, range_spec: str) -> list[dict]:
+    """Every commit in `range_spec` (`<lower>..<upper>`, or a bare ref for
+    "every commit reachable from ref"), hash + subject, unbounded — the
+    full range population `releasemap`'s unattributed-commit disclosure
+    needs (A7), not the NFR-4-bounded display list `list_commits_since`
+    returns for the git-native board."""
+    out = _run(repo_root, "log", range_spec, f"--format=%h{_FIELD_SEP}%s")
+    if not out:
+        return []
+    records = []
+    for line in out.split("\n"):
+        commit_hash, subject = line.split(_FIELD_SEP, 1)
+        records.append({"hash": commit_hash, "subject": subject})
+    return records
+
+
+def commits_touching_path(repo_root: str, range_spec: str, pathspec: str) -> set[str]:
+    """Short hashes of commits within `range_spec` that touched `pathspec` —
+    a bounded, fixed-vector `git log <range> -- <pathspec>` call, never a
+    second implementation of `git diff`/`blame` (A7). `--` guards against a
+    feature-directory name shaped like a git flag."""
+    out = _run(repo_root, "log", range_spec, "--format=%h", "--", pathspec)
+    return set(out.split("\n")) if out else set()
+
+
+def list_ever_touched_spark_feature_names(repo_root: str) -> set[str]:
+    """Every distinct `.spark/<name>/...` first path-segment ever touched by
+    a commit reachable from **any** ref (`--all`) — not just the currently
+    checked-out working tree. `git log <range> -- <pathspec>` (used by
+    `commits_touching_path`) already scores membership correctly against
+    historical state regardless of what's on disk *now*; the only thing
+    that was silently working-tree-scoped was the candidate name list
+    itself. A feature directory later renamed, deleted, or that only ever
+    existed on a non-current branch is otherwise invisible to every release
+    it actually shipped in — its real commits fall through to
+    `unattributed` with no error disclosing why (QA B1)."""
+    out = _run(repo_root, "log", "--all", "--pretty=format:", "--name-only", "--", ".spark/")
+    names: set[str] = set()
+    for line in out.split("\n"):
+        line = line.strip()
+        if not line.startswith(".spark/"):
+            continue
+        rest = line[len(".spark/"):]
+        name = rest.split("/", 1)[0]
+        if name:
+            names.add(name)
+    return names
+
+
 def list_branches(repo_root: str) -> list[dict]:
     """Local `refs/heads/*` only (spec C4) — tip hash and tip date, no
     identity field. A tip whose committer timestamp is unparseable makes

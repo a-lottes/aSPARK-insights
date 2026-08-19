@@ -15,6 +15,7 @@ from pathlib import Path
 from aspark_insights.build import build_snapshot
 from aspark_insights.errors import GraphNotBuiltError, InsightsError, VerifyMismatchError
 from aspark_insights.gitboard.board import build_board
+from aspark_insights.gitboard.releasemap import build_release_map
 from aspark_insights.query import run_query
 from aspark_insights.render import run_render
 from aspark_insights.serialization import canonical_json
@@ -110,6 +111,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_board.add_argument("--format", choices=("json", "html"), default="json", help="Output format (default: json).")
 
+    p_releases = sub.add_parser(
+        "releases",
+        help="Map every git tag, and the open window since the latest one, to the "
+             ".spark/<feature>/ directories that shipped in it. Never reads the "
+             "graph (source: git-interim, the documented ADR-2 fallback).",
+    )
+    p_releases.add_argument("--as-of", required=True, help="Date this map represents, YYYY-MM-DD (an input, never the wall clock).")
+    p_releases.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads local git plumbing and .spark/ directory names only — never the graph.")
+    p_releases.add_argument(
+        "--output", default=None,
+        help="Accepted for flag parity with other subcommands; unused this cycle — "
+             "--format json (the only value) always writes to stdout, never to disk.",
+    )
+    p_releases.add_argument("--format", choices=("json",), default="json", help="Output format (default and only value this cycle: json).")
+
     return parser
 
 
@@ -132,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_verify(args)
         if args.command == "board":
             return _cmd_board(args)
+        if args.command == "releases":
+            return _cmd_releases(args)
         parser.error(f"command {args.command!r} not wired up yet")
         return 2  # pragma: no cover - argparse.error() exits before this
     except InsightsError as exc:
@@ -233,6 +251,12 @@ def _cmd_board(args: argparse.Namespace) -> int:
 
     path = run_board_report(board, args.output or args.repo)
     print(canonical_json({"report": str(path)}), end="")
+    return 0
+
+
+def _cmd_releases(args: argparse.Namespace) -> int:
+    release_map = build_release_map(args.repo, args.as_of)
+    print(canonical_json(release_map), end="")
     return 0
 
 
