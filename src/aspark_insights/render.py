@@ -18,6 +18,14 @@ from aspark_insights.store import STORE_DIRNAME
 
 REPORT_FILENAME = "report.html"
 
+# `.metric-bar`'s empty track was `#e2e2e2` on `#fff` (1.30:1) — invisible-
+# looking but WCAG-failing (below the 3:1 non-text bar) whenever a bar's
+# fill is near 0%, e.g. a just-moved git-board branch (age_days: 0). Found
+# by git-native-mid-cycle-board's `/demo-day` (NFR-7), fixed here since
+# `gitboard/report.py` reuses this exact class for its own age bar rather
+# than a copy. `#8c8c8c` measures ~3.36:1 (WCAG relative-luminance formula),
+# with margin above the 3:1 floor, while staying visually distinct from the
+# `#1a1a1a` fill it sits behind.
 _STYLE = """
   body { font-family: system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; margin: 2rem; max-width: 60rem; }
   h1 { font-size: 1.5rem; }
@@ -38,7 +46,7 @@ _STYLE = """
   .metric-value { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.4rem; }
   .metric-value--null { font-size: 1rem; font-weight: 600; font-style: italic; color: #444; }
   .metric-n { font-size: 0.85rem; font-weight: 400; color: #666; }
-  .metric-bar { height: 6px; background: #e2e2e2; border-radius: 3px; overflow: hidden; }
+  .metric-bar { height: 6px; background: #8c8c8c; border-radius: 3px; overflow: hidden; }
   .metric-bar-fill { height: 100%; background: #1a1a1a; }
   .metric-reason { font-size: 0.82rem; color: #444; margin: 0.4rem 0 0; }
   .metric-id { font-size: 0.75rem; color: #666; margin: 0.5rem 0 0; }

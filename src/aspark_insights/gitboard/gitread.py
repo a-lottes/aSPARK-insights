@@ -20,6 +20,15 @@ from aspark_insights.errors import GitUnavailableError, NotAGitRepoError
 _TIMEOUT_SECONDS = 10
 _FIELD_SEP = "\x1f"
 
+# Two divergent git quirks for the same underlying cause — a commit whose
+# committer timestamp can't be parsed (QA B1/B2/B3, demo-day 2026-08-19):
+# `log --format=%cI` leaves the placeholder literal, unexpanded, instead of
+# substituting anything; `for-each-ref`'s `%(committerdate:iso-strict)`
+# instead silently substitutes the Unix epoch. Both are non-empty, truthy
+# strings that would otherwise slip past a plain `if raw:`/`is None` check.
+_UNEXPANDED_DATE_TOKEN = "%cI"
+_EPOCH_ISO_STRICT = "1970-01-01T00:00:00+00:00"
+
 
 class GitCommandFailed(Exception):
     """Internal only: a nonzero git exit. Never escapes this module — each
@@ -82,11 +91,15 @@ def resolve_tag(repo_root: str) -> str | None:
 
 def tag_commit_date(repo_root: str, tag: str) -> str | None:
     """The tag's own commit date, ISO-8601. `None` if it cannot be read —
-    AC-1.10(b)'s degradation, distinct from AC-1.10(a)'s no-tag-at-all case."""
+    AC-1.10(b)'s degradation, distinct from AC-1.10(a)'s no-tag-at-all case.
+    A commit with an unparseable committer timestamp makes git itself leave
+    `%cI` unexpanded (B1) — that literal token is `None`-worthy too, not a
+    real date `datetime.fromisoformat` could ever parse."""
     try:
-        return _run(repo_root, "log", "-1", "--format=%cI", tag)
+        raw = _run(repo_root, "log", "-1", "--format=%cI", tag)
     except GitCommandFailed:
         return None
+    return None if raw == _UNEXPANDED_DATE_TOKEN else raw
 
 
 def count_commits_since(repo_root: str, tag: str) -> int:
@@ -123,15 +136,32 @@ def list_commit_subjects_since(repo_root: str, tag: str) -> list[str]:
 def list_commits_since(repo_root: str, tag: str, max_count: int) -> list[dict]:
     """Hash, subject (first line only — `%s` already stops there) and commit
     date, bounded to `max_count` (NFR-4). No identity field is ever asked of
-    git (NFR-3)."""
+    git (NFR-3). A commit's own unparseable committer timestamp hits the same
+    unexpanded-`%cI` quirk `tag_commit_date` guards against (B3) — this field
+    has no null state of its own to degrade into (no AC governs it), so the
+    leaked literal git syntax is replaced with a plain, honest sentence
+    instead of being carried through as if it were a real date."""
     fmt = f"%h{_FIELD_SEP}%s{_FIELD_SEP}%cI"
     out = _run(repo_root, "log", f"{tag}..HEAD", f"--format={fmt}", f"--max-count={max_count}")
-    return _parse_records(out, ("hash", "subject", "date"))
+    records = _parse_records(out, ("hash", "subject", "date"))
+    for r in records:
+        if r["date"] == _UNEXPANDED_DATE_TOKEN:
+            r["date"] = "date could not be read"
+    return records
 
 
 def list_branches(repo_root: str) -> list[dict]:
     """Local `refs/heads/*` only (spec C4) — tip hash and tip date, no
-    identity field."""
+    identity field. A tip whose committer timestamp is unparseable makes
+    `for-each-ref` silently substitute the Unix epoch rather than emitting
+    empty output (B2) — indistinguishable from a genuine epoch date at this
+    level, but no real commit predates git's own 2005 creation, so it is
+    normalized to `""` here, which `board._build_branches`'s existing
+    `if b["tip_date"]:` check already treats as unreadable (AC-3.3)."""
     fmt = f"%(refname:short){_FIELD_SEP}%(objectname:short){_FIELD_SEP}%(committerdate:iso-strict)"
     out = _run(repo_root, "for-each-ref", f"--format={fmt}", "refs/heads/")
-    return _parse_records(out, ("name", "tip_hash", "tip_date"))
+    records = _parse_records(out, ("name", "tip_hash", "tip_date"))
+    for r in records:
+        if r["tip_date"] == _EPOCH_ISO_STRICT:
+            r["tip_date"] = ""
+    return records

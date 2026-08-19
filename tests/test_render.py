@@ -17,7 +17,7 @@ import pytest
 
 from aspark_insights.build import build_snapshot
 from aspark_insights.errors import InsightsError
-from aspark_insights.render import REPORT_FILENAME, render_html, run_render
+from aspark_insights.render import _STYLE, REPORT_FILENAME, render_html, run_render
 from aspark_insights.store import STORE_DIRNAME, write_snapshot
 
 FIXTURE_GRAPH = Path(__file__).parent / "fixtures" / "graph.json"
@@ -822,3 +822,36 @@ def test_caveat_present_page_still_has_no_javascript_or_external_refs():
     text = render_html(_snapshot(metrics=metrics))
     assert not _EXTERNAL_REF_PATTERN.search(text)
     assert "<script>" not in text
+
+
+# --- git-native-mid-cycle-board QA NFR-7: .metric-bar's empty track ---------
+
+
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG 2.1 relative luminance for a `#rrggbb` color."""
+    hex_color = hex_color.lstrip("#")
+    channels = [int(hex_color[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    r, g, b = linear
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast_ratio(hex_a: str, hex_b: str) -> float:
+    la, lb = _relative_luminance(hex_a), _relative_luminance(hex_b)
+    lighter, darker = max(la, lb), min(la, lb)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def test_metric_bar_track_color_meets_wcag_non_text_contrast():
+    """QA NFR-7 (found via `git-native-mid-cycle-board`'s `/demo-day`, which
+    reuses this exact class for its own per-branch age bar): the empty
+    track was `#e2e2e2` on `#fff`, measuring 1.30:1 — invisible-looking but
+    WCAG-failing whenever a bar's fill is near 0%, e.g. a just-moved branch
+    (`age_days: 0`). Fixed to `#8c8c8c`; this test pins the shipped hex
+    value and its computed contrast so a future edit can't silently drift
+    back below the 3:1 non-text-contrast floor without this failing."""
+    match = re.search(r"\.metric-bar\s*\{[^}]*background:\s*(#[0-9a-fA-F]{6})", _STYLE)
+    assert match, "expected a `.metric-bar { ... background: #rrggbb ... }` rule in _STYLE"
+    track_color = match.group(1)
+    assert track_color.lower() == "#8c8c8c"
+    assert _contrast_ratio(track_color, "#ffffff") >= 3.0

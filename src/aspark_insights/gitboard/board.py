@@ -59,13 +59,20 @@ def _build_days_since_tag(repo_root: str, tag: str | None, as_of: str) -> dict |
     """`None` (the key is *absent* from the board, AC-1.10(a)) when there is
     no tag at all — a second null for the same cause AC-1.2 already explains
     would be two competing explanations, not one. A dict (present, possibly
-    null-with-reason) whenever a tag exists."""
+    null-with-reason) whenever a tag exists. The `_whole_days` parse is
+    wrapped locally (QA B1): `tag_commit_date` already filters out git's own
+    unexpanded-placeholder quirk, but any other unparseable-but-truthy date
+    must still degrade into *this one figure's* null, never escape to
+    `build_board`'s outer catch-all and take the whole report down with it."""
     if tag is None:
         return None
     tag_date = gitread.tag_commit_date(repo_root, tag)
     if tag_date is None:
         return {"value": None, "reason": f"commit date for tag {tag!r} could not be read"}
-    return {"value": _whole_days(tag_date, as_of), "reason": None}
+    try:
+        return {"value": _whole_days(tag_date, as_of), "reason": None}
+    except ValueError:
+        return {"value": None, "reason": f"commit date for tag {tag!r} could not be read"}
 
 
 def _build_work_types(repo_root: str, tag: str | None, commit_count: int | None) -> dict | None:
@@ -81,11 +88,19 @@ def _build_work_types(repo_root: str, tag: str | None, commit_count: int | None)
 
 
 def _build_branches(repo_root: str, as_of: str) -> list[dict]:
+    """Per-branch parse is wrapped locally (QA B2), same reasoning as
+    `_build_days_since_tag`: `gitread.list_branches` already normalizes git's
+    epoch-substitution quirk to `""`, but any other unparseable-but-truthy
+    tip date must degrade into *that one branch's* null age, never a
+    confidently-wrong guessed number and never a whole-report failure."""
     branches = []
     for b in gitread.list_branches(repo_root):
-        if b["tip_date"]:
+        if not b["tip_date"]:
+            branches.append({**b, "age_days": None, "age_reason": "branch tip commit date could not be read"})
+            continue
+        try:
             branches.append({**b, "age_days": _whole_days(b["tip_date"], as_of), "age_reason": None})
-        else:
+        except ValueError:
             branches.append({**b, "age_days": None, "age_reason": "branch tip commit date could not be read"})
     return branches
 

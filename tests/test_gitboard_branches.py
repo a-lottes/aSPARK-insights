@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -16,6 +17,22 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
         ["git", "-c", "user.email=t@example.com", "-c", "user.name=Test", *args],
         cwd=repo, capture_output=True, text=True, check=True,
     )
+
+
+def _corrupt_committer_timestamp(repo: Path, branch: str) -> None:
+    """Real git corruption, not a mock — see test_gitboard_days.py's twin
+    helper for the same technique against a tag's commit (B1)."""
+    raw = _git(repo, "cat-file", "-p", branch).stdout
+    bad = re.sub(
+        r"^committer (.*) <(.*)> \d+ [+-]\d+$",
+        r"committer \1 <\2> NOTATIMESTAMP +0000",
+        raw, flags=re.MULTILINE,
+    )
+    new_hash = subprocess.run(
+        ["git", "hash-object", "-w", "-t", "commit", "--stdin"],
+        cwd=repo, input=bad, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    _git(repo, "update-ref", f"refs/heads/{branch}", new_hash)
 
 
 @pytest.fixture
@@ -91,4 +108,29 @@ def test_unreadable_branch_tip_date_is_null_age_with_reason(monkeypatch, tmp_pat
     monkeypatch.setattr(gitread, "list_branches", _broken)
     board = build_board(str(repo), "2026-08-13")
     assert board["branches"][0]["age_days"] is None
+    assert "could not be read" in board["branches"][0]["age_reason"]
+
+
+def test_real_corrupted_branch_tip_date_is_null_not_a_guessed_epoch_age(tmp_path: Path):
+    """QA B2 (Major): `git for-each-ref`'s `%(committerdate:iso-strict)`
+    silently substitutes the Unix epoch (`1970-01-01T00:00:00+00:00`) for a
+    commit with an unparseable committer timestamp, rather than emitting
+    empty output — unlike `log --format`'s literal-placeholder behavior
+    (B1's twin bug). The old `if b["tip_date"]:` truthiness check treated
+    that fabricated-but-truthy epoch string as a real date, silently
+    displaying a ~56-year-old age with `age_reason: None`. Reproduced with a
+    real corrupted git object, not the mocked empty-string short-circuit
+    `test_unreadable_branch_tip_date_is_null_age_with_reason` already
+    covers."""
+    repo = tmp_path / "badbranchdate"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "commit", "--allow-empty", "-q", "-m", "feat: base")
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").stdout.strip()
+    _corrupt_committer_timestamp(repo, branch)
+
+    board = build_board(str(repo), "2026-08-13")
+    assert len(board["branches"]) == 1
+    assert board["branches"][0]["age_days"] is None
+    assert board["branches"][0]["age_reason"] is not None
     assert "could not be read" in board["branches"][0]["age_reason"]

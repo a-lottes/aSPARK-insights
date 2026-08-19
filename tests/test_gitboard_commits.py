@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -17,6 +18,22 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
         ["git", "-c", "user.email=t@example.com", "-c", "user.name=Test", *args],
         cwd=repo, capture_output=True, text=True, check=True,
     )
+
+
+def _corrupt_committer_timestamp(repo: Path, branch: str) -> None:
+    """Real git corruption, not a mock — see test_gitboard_days.py's twin
+    helper for the same technique against a tag's commit (B1)."""
+    raw = _git(repo, "cat-file", "-p", branch).stdout
+    bad = re.sub(
+        r"^committer (.*) <(.*)> \d+ [+-]\d+$",
+        r"committer \1 <\2> NOTATIMESTAMP +0000",
+        raw, flags=re.MULTILINE,
+    )
+    new_hash = subprocess.run(
+        ["git", "hash-object", "-w", "-t", "commit", "--stdin"],
+        cwd=repo, input=bad, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    _git(repo, "update-ref", f"refs/heads/{branch}", new_hash)
 
 
 @pytest.fixture
@@ -130,3 +147,30 @@ def test_subject_containing_the_field_separator_byte_does_not_misalign_fields(tm
     commit = board["commits"]["shown"][0]
     assert commit["subject"] == hostile_subject
     assert commit["date"].count("-") >= 2  # still a real ISO-strict date, not subject overflow
+
+
+# --- QA B3: a corrupted commit's own date field must never leak git's raw,
+#     unexpanded format-string syntax into user-facing output -------------
+
+
+def test_commit_with_unparseable_committer_date_never_leaks_raw_format_token(tmp_path: Path):
+    """`git log --format=%cI` leaves the literal, unexpanded `%cI` token for
+    a commit whose committer timestamp can't be parsed (the same quirk B1
+    hits via `tag_commit_date`, here via `list_commits_since`'s own use of
+    `%cI`). No AC governs this field's degradation, so the fix substitutes
+    a plain, honest sentence rather than fabricating a date or leaking raw
+    git format syntax into JSON a reader would reasonably trust as ISO-8601."""
+    repo = tmp_path / "baddate"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "commit", "--allow-empty", "-q", "-m", "feat: base")
+    _git(repo, "tag", "v1.0.0")
+    _git(repo, "commit", "--allow-empty", "-q", "-m", "feat: corrupted")
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").stdout.strip()
+    _corrupt_committer_timestamp(repo, branch)
+
+    board = build_board(str(repo), "2026-08-13")
+    commit = board["commits"]["shown"][0]
+    assert commit["date"] != "%cI"
+    assert "%c" not in commit["date"]
+    assert commit["date"] == "date could not be read"

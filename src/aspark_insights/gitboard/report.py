@@ -21,12 +21,16 @@ REPORT_FILENAME = "board.html"
 # Reuses only colors already verified elsewhere in this project's own
 # rendered output (render.py's `.stale-cue`/`.null-value`/`.metric-*`
 # palette) — no new color pair this module introduces needs a fresh
-# /demo-day contrast measurement.
+# /demo-day contrast measurement. Exception, fixed post-demo-day (QA
+# NFR-7): `.interim-marker`'s border was `#999` on `#fff`, measuring
+# 2.85:1 — below the 3:1 non-text bar. `#444` is the already-verified
+# `.null-value`/`.metric-value--null` gray (9.74:1 per spec §8's own
+# "Accessibility notes"), reused here rather than picking a fresh,
+# unverified shade.
 _BOARD_STYLE = """
-  .interim-marker { border: 1px solid #999; background: #f7f7f7; padding: 0.4rem 0.6rem; font-weight: 700; font-size: 0.85rem; margin: 0 0 0.75rem; }
+  .interim-marker { border: 1px solid #444; background: #f7f7f7; padding: 0.4rem 0.6rem; font-weight: 700; font-size: 0.85rem; margin: 0 0 0.75rem; }
   .answer-sentence { font-size: 1rem; margin: 0 0 1rem; }
   .badge { display: inline-block; font-size: 0.75rem; font-weight: 700; color: #1a1a1a; background: #f0f0f0; padding: 0.1rem 0.4rem; border-radius: 3px; }
-  .badge--unclassified { background: #fff; border: 1px dashed #999; color: #444; }
   .commit-list { list-style: none; padding: 0; margin: 0.75rem 0; }
   .commit-item { border: 1px solid #ccc; border-radius: 6px; padding: 0.6rem 0.8rem; margin-bottom: 0.5rem; }
   .commit-item dl { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.6rem; margin: 0; }
@@ -50,7 +54,15 @@ def _render_interim_marker() -> str:
 
 
 def _pluralize(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+    """QA B4: a naive `+s` mispluralizes "local branch" as "local branchs" —
+    English nouns ending in a sibilant sound (ch/sh/s/x/z) take `-es`. The
+    only three nouns this is ever called with are "day", "commit" and
+    "local branch"; this covers the one that needs it without inventing a
+    general-purpose pluralization library for a three-word vocabulary."""
+    if n == 1:
+        return f"{n} {noun}"
+    suffix = "es" if noun.endswith(("ch", "sh", "s", "x", "z")) else "s"
+    return f"{n} {noun}{suffix}"
 
 
 def _answer_sentence_text(board: dict) -> str:
@@ -174,7 +186,11 @@ def _render_work_types_section(board: dict) -> str:
 def _render_commits_section(board: dict) -> str:
     """AC-4.12(b): a scannable list, each item a `<dl>` naming Type, Subject,
     Hash and Date explicitly — not visual order alone. The type badge is the
-    one genuinely new primitive `render.py` has no precedent for (AC-4.7)."""
+    one genuinely new primitive `render.py` has no precedent for (AC-4.7).
+    Spec §8 finding 18 ("badge absent rather than `unclassified` on every
+    row") — an unclassified commit's Type `<dd>` is present (the label
+    survives, AC-4.12(b)'s "type never dropped") but carries no badge at
+    all, rather than a visible "unclassified" badge (QA B5)."""
     commits = board["commits"]
     if commits["value"] is None:
         body = f'<p class="empty-notice">{_esc(commits["reason"])}</p>\n'
@@ -184,10 +200,7 @@ def _render_commits_section(board: dict) -> str:
         items = []
         for c in commits["shown"]:
             wtype = classify(c["subject"])
-            badge = (
-                f'<span class="badge">{_esc(wtype)}</span>' if wtype
-                else '<span class="badge badge--unclassified">unclassified</span>'
-            )
+            badge = f'<span class="badge">{_esc(wtype)}</span>' if wtype else ""
             items.append(
                 '<li class="commit-item">\n<dl>\n'
                 f"<dt>Type</dt><dd>{badge}</dd>\n"

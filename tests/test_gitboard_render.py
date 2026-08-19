@@ -6,10 +6,27 @@ from __future__ import annotations
 
 import re
 
-from aspark_insights.gitboard.report import render_board_html
+from aspark_insights.gitboard.report import _BOARD_STYLE, render_board_html
 
 _EXTERNAL_REF_PATTERN = re.compile(r'(https?://|<link\b|<script\b[^>]*\bsrc=)', re.IGNORECASE)
 _HOSTILE = "<script>alert(1)</script>"
+
+
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG 2.1 relative luminance for a `#rrggbb` or shorthand `#rgb` color."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) == 3:
+        hex_color = "".join(ch * 2 for ch in hex_color)
+    channels = [int(hex_color[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    r, g, b = linear
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast_ratio(hex_a: str, hex_b: str) -> float:
+    la, lb = _relative_luminance(hex_a), _relative_luminance(hex_b)
+    lighter, darker = max(la, lb), min(la, lb)
+    return (lighter + 0.05) / (darker + 0.05)
 
 
 def _board(**overrides) -> dict:
@@ -108,6 +125,19 @@ def test_interim_marker_is_legible_near_top_and_not_stale_cue_styled():
     assert pos_h1 < pos_marker < pos_sentence  # directly after <h1>, before anything else
 
 
+def test_interim_marker_border_meets_wcag_non_text_contrast():
+    """QA NFR-7: `.interim-marker`'s border was `#999` on `#fff`, measuring
+    2.85:1 — below the 3:1 non-text-contrast floor. Fixed to `#444` (the
+    already-verified `.null-value` gray, 9.74:1 per spec §8's own
+    "Accessibility notes" — reused rather than picking a fresh, unverified
+    shade). This test pins the shipped value and its computed contrast."""
+    match = re.search(r"\.interim-marker\s*\{[^}]*border:\s*1px solid\s*(#[0-9a-fA-F]{3,6})", _BOARD_STYLE)
+    assert match, "expected a `.interim-marker { border: 1px solid #rgb-or-rrggbb ... }` rule"
+    border_color = match.group(1)
+    assert border_color.lower() == "#444"
+    assert _contrast_ratio(border_color, "#ffffff") >= 3.0
+
+
 def test_marker_source_field_also_lives_in_provenance():
     text = render_board_html(_board())
     provenance_section = text.split('id="provenance"')[1]
@@ -149,6 +179,19 @@ def test_answer_sentence_zero_branches_stated_plainly():
     text = render_board_html(board)
     sentence = text.split('class="answer-sentence"')[1].split("</p>")[0]
     assert "No local branches found" in sentence
+
+
+def test_answer_sentence_pluralizes_multiple_branches_correctly():
+    """QA B4: a naive +s mispluralized "local branch" as "local branchs"
+    for any branch count other than 0/1."""
+    board = _board(branches=[
+        {"name": "main", "tip_hash": "abc123", "tip_date": "2026-08-13T10:00:00+00:00", "age_days": 0, "age_reason": None},
+        {"name": "dev", "tip_hash": "def456", "tip_date": "2026-08-01T10:00:00+00:00", "age_days": 12, "age_reason": None},
+    ])
+    text = render_board_html(board)
+    sentence = text.split('class="answer-sentence"')[1].split("</p>")[0]
+    assert "2 local branches" in sentence
+    assert "branchs" not in sentence
 
 
 def test_answer_sentence_shallow_qualifier_inline():
@@ -281,11 +324,19 @@ def test_commit_listing_has_programmatic_name():
     assert '<section id="commits">\n<h2>Commits</h2>' in text
 
 
-def test_unrecognized_commit_gets_unclassified_badge():
+def test_unrecognized_commit_gets_no_badge_at_all():
+    """QA B5: spec §8 finding 18 ("badge absent rather than `unclassified`
+    on every row") — an unclassified commit's Type `<dd>` is present (the
+    field survives, AC-4.12(b)) but carries no `.badge` span, while a
+    classified sibling commit in the same list still gets its badge."""
     text = render_board_html(_board())
-    commits_section = text.split('id="commits"')[1]
-    assert "badge--unclassified" in commits_section
-    assert "unclassified" in commits_section
+    commits_section = text.split('id="commits"')[1].split("</section>")[0]
+    items = commits_section.split("<li")
+    unclassified_item = next(i for i in items if "no prefix here" in i)
+    classified_item = next(i for i in items if "add thing" in i)
+    assert "<dt>Type</dt><dd></dd>" in unclassified_item
+    assert "badge" not in unclassified_item
+    assert '<span class="badge">feat</span>' in classified_item
 
 
 # --- AC-4.6: provenance renders on every report, dl field/value pairing ----

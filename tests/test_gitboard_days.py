@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -18,6 +19,25 @@ def _git(repo: Path, *args: str, extra_env: dict | None = None) -> subprocess.Co
         ["git", "-c", "user.email=t@example.com", "-c", "user.name=Test", *args],
         cwd=repo, capture_output=True, text=True, check=True, env=env,
     )
+
+
+def _corrupt_committer_timestamp(repo: Path, ref: str = "HEAD") -> None:
+    """Real git corruption, not a mock (this project's own house convention
+    — never mock the seam a bug lives in): replaces `ref`'s committer
+    timestamp with a non-numeric token, forcing git's own date-formatting
+    machinery into the failure mode QA's demo-day reproduced (B1/B2)."""
+    raw = _git(repo, "cat-file", "-p", ref).stdout
+    bad = re.sub(
+        r"^committer (.*) <(.*)> \d+ [+-]\d+$",
+        r"committer \1 <\2> NOTATIMESTAMP +0000",
+        raw, flags=re.MULTILINE,
+    )
+    new_hash = subprocess.run(
+        ["git", "hash-object", "-w", "-t", "commit", "--stdin"],
+        cwd=repo, input=bad, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").stdout.strip()
+    _git(repo, "update-ref", f"refs/heads/{branch}", new_hash)
 
 
 @pytest.fixture
@@ -66,6 +86,31 @@ def test_unreadable_tag_date_is_null_with_reason(monkeypatch, tagged_repo: Path)
     assert b["days_since_tag"]["value"] is None
     assert "v1.0.0" in b["days_since_tag"]["reason"]
     assert "could not be read" in b["days_since_tag"]["reason"]
+
+
+def test_real_corrupted_tag_date_nulls_the_one_figure_not_the_whole_report(tmp_path: Path):
+    """QA B1 (Major): a tag whose commit has an unparseable committer
+    timestamp used to crash the entire command — `git log --format=%cI`
+    leaves the literal, unexpanded `%cI` token instead of substituting
+    anything, which is non-empty/truthy and slipped past the `is None`
+    guard, raising uncaught inside `_whole_days` and reaching only
+    `build_board`'s outer catch-all (`GitUnavailableError` for the *whole*
+    report). Reproduced here with a real corrupted git object, not the
+    mocked short-circuit `test_unreadable_tag_date_is_null_with_reason`
+    already covers — this is the actual git behavior, not a stand-in."""
+    repo = tmp_path / "badtagdate"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "commit", "--allow-empty", "-q", "-m", "feat: base")
+    _corrupt_committer_timestamp(repo)
+    _git(repo, "tag", "v1.0.0")
+    _git(repo, "commit", "--allow-empty", "-q", "-m", "feat: on top")
+
+    b = build_board(str(repo), "2026-08-13")  # must not raise
+    assert b["days_since_tag"]["value"] is None
+    assert "v1.0.0" in b["days_since_tag"]["reason"]
+    assert "could not be read" in b["days_since_tag"]["reason"]
+    assert b["commits"]["value"] == 1  # the rest of the report still succeeds
 
 
 # --- NFR-5: as_of-relative, UTC-normalized, never now() ----------------------
