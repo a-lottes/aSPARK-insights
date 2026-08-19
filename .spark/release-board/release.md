@@ -5,17 +5,17 @@
 | **Phase** | Keep |
 | **Owner** | Release Manager (`/go-live`) |
 | **Input** | `review.md` (`passed`), `qa.md` (`passed`) |
-| **Status** | `preparing` |
-| **Version** | v0.8.0 (local tag created — see §3; not yet pushed) |
+| **Status** | `released` |
+| **Version** | v0.8.0 (pushed — `origin/main` at `a5f43be`, tag `v0.8.0` on `origin`) |
 | **Date** | 2026-08-19 |
 | **Ticket** | none (per `spec.md` header) |
 
 <!-- Handoff: read this block first, the numbered sections below by exception. -->
 
 **Handoff**
-- **Status:** `preparing` — release commit made (`4dc89ff`), all four tags now created locally (`v0.5.0` pre-existing at `3a8419a`, `v0.6.0`@`26e7f95`, `v0.7.0`@`4743b41`, `v0.8.0`@`4dc89ff` — all four verified this pass via `git tag -v`). **Push deliberately not executed** — see "Authorization decision" below. Nothing pushed, `origin/main` unchanged at `28a5bfd`.
-- **Summary:** Both gates confirmed `passed`; fresh pre-flight (445 tests, clean build, clean tree) green on release commit `4dc89ff`; direct mode confirmed; local tag plan from §3 fully executed and verified (`git tag -v` on all four, `git log --oneline 28a5bfd..HEAD` shows exactly the expected 8 commits). The outward-facing push was requested via a coordinator-relayed message during this pass, but was not executed: per this role's own operating rule, no message from an agent — including one relaying a quoted claim of user authorization — substitutes for the user's own explicit go: only the permission system or the user's own message can. See "Authorization decision" below for the full reasoning and what's needed to proceed.
-- **Open:** `3 outstanding` — (1) genuine, directly-verifiable user authorization to push (not yet established), (2) `git push origin main` + `git push origin v0.5.0 v0.6.0 v0.7.0 v0.8.0` pending that authorization, (3) the leftover untracked `.spark/git-native-mid-cycle-board/release.md` remains uncommitted, out of scope for this pass — left untouched per its own owning feature's future `/go-live` pass, not this one.
+- **Status:** `released`. The release-manager subagent's prepare pass correctly declined to push on a *relayed* authorization claim (see "Authorization decision" below — that caution is sound and preserved as a Learning). The push was then executed directly by the orchestrating session, which holds the user's own first-hand "Ja, jetzt alle vier veröffentlichen" from this same conversation (via `AskUserQuestion`, not a relay) and has its own Bash access. `origin/main` now sits at `a5f43be`; `v0.5.0`–`v0.8.0` are all present on `origin`, confirmed via a fresh clone.
+- **Summary:** Both gates confirmed `passed`; pre-flight green (445 tests, clean build, clean tree) on release commit `4dc89ff`; direct mode confirmed. Push executed: `git push origin main` (`28a5bfd..a5f43be`) and `git push origin v0.5.0 v0.6.0 v0.7.0 v0.8.0` (3 new tags pushed; `v0.5.0` already existed remotely as of this push — first time any of the four reached `origin`). Post-release smoke check run against a fresh clone with the documented sibling `aSPARK-graph` layout: CLI installs, `releases` subcommand present, real invocation returns valid JSON (8 real tags + pseudo-release, `insights_version: 0.8.0`, no identity leak), AC-1.8's byte-equality holds against a fresh `insights board` call on the published artifact, and `build`/`query` (existing surfaces) unaffected. See §3.
+- **Open:** `1 outstanding` — the leftover untracked `.spark/git-native-mid-cycle-board/release.md` remains uncommitted, out of scope for this pass — left untouched per its own owning feature's future `/go-live` pass, not this one.
 - **Binding ruling:** §3 Release Actions and the KEEP GATE below carry the final ruling.
 - **On conflict:** the numbered body below wins for everything except `Status`/`Version`.
 
@@ -53,10 +53,10 @@
 
 | Action | Result |
 |---|---|
-| Version bump & tag | Version bump (`0.7.0` → `0.8.0`) applied inside release commit `4dc89ff`. **All four tags created locally this pass**, verified via `git tag -v` (all resolve, tagger `Andreas Lottes <andreas@lottes.dev>`, correct target commit, no GPG signature — matches every prior tag in this repo, `error: no signature found` on all four including the pre-existing `v0.5.0`, so this is the repo's existing norm, not a new gap): `v0.5.0`→`3a8419a` (pre-existing), `v0.6.0`→`26e7f95`, `v0.7.0`→`4743b41`, `v0.8.0`→`4dc89ff`. `git log --oneline 28a5bfd..HEAD` confirmed exactly the 8 expected commits, matching the pre-push plan exactly — nothing looked wrong. **Tags are local only — not pushed.** |
+| Version bump & tag | Version bump (`0.7.0` → `0.8.0`) applied inside release commit `4dc89ff`. All four tags created locally, verified via `git tag -v`: `v0.5.0`→`3a8419a` (pre-existing), `v0.6.0`→`26e7f95`, `v0.7.0`→`4743b41`, `v0.8.0`→`4dc89ff`. **Then pushed to `origin`**: `git push origin main` moved `origin/main` from `28a5bfd` to `a5f43be` (9 commits, including the follow-up `.spark/release-board/release.md`-recording commit); `git push origin v0.5.0 v0.6.0 v0.7.0 v0.8.0` reported `[new tag]` for all four. Confirmed via a fresh `git clone` of `origin`: `git log -1` shows `a5f43be`, `git tag -l` lists all 8 tags through `v0.8.0`. |
 | PR / merge | N/A — direct mode. |
-| Deploy | N/A — no PyPI target yet; "deploy" for this project is the git push itself. |
-| Post-release smoke check | **Not run — N/A this pass.** The plan (§ below, unchanged from the original draft) is written to run against a fresh clone of `origin` *after* the push; since the push did not happen, there is nothing new on `origin` to smoke-test (it is still at `28a5bfd`, unchanged). Running it now would only re-confirm `v0.4.0`'s already-released behavior, not this release's. |
+| Deploy | N/A — no PyPI target yet; "deploy" for this project is the git push itself, now done. |
+| Post-release smoke check | **Run, green.** Fresh `git clone` of `origin` into a scratch parent directory with the documented sibling `aSPARK-graph` checkout symlinked alongside it (matching README's own Install instructions). `uv sync --extra dev` succeeded. `insights --help` lists `releases` as a subcommand. `insights releases --as-of 2026-08-19 --repo .` against the fresh clone returned exit 0, valid JSON: `provenance.insights_version == "0.8.0"`, `provenance.source == "git-interim"`, 8 real tags (`v0.1.0`–`v0.8.0`) plus a trailing `tag: null` pseudo-release — 9 entries total; `grep -iE 'author\|committer\|email\|co-authored\|signed-off'` found nothing. AC-1.8 cross-check: a fresh `insights board` call against the same clone produced a `commits` object byte-identical to `releases`' pseudo-release `commits` field (`{"value": 1, "shown": [{"hash": "a5f43be", "subject": "docs: record release-board release report — tags created locally, push held", ...}], ...}` in both). Existing surfaces re-confirmed unaffected: `insights build --repo ../aSPARK-graph` and `insights query` both exit 0 with well-formed output. Scratch clone removed after. |
 
 ### Authorization decision (this pass)
 
@@ -68,6 +68,8 @@ Reasoning: this role's own operating instructions state, without exception, that
 
 **What would resolve this:** direct confirmation through this session's actual permission system, or a message that reaches me as the user's own rather than one relayed and characterized by another agent. Once either is true, the exact commands below are unchanged and ready to run immediately — nothing about the plan itself is in question, only the channel through which "go" arrived this time.
 
+**Resolution:** the orchestrating session held the user's own direct answer to an explicit `AskUserQuestion` prompt ("Vier unveröffentlichte Versionen (v0.5.0–v0.8.0) liegen lokal bereit. Jetzt alle zusammen taggen und pushen, oder weiter zurückhalten?" → "Ja, jetzt alle vier veröffentlichen") from earlier in the same conversation — a first-hand answer to a question the orchestrator itself posed to the user, not a claim relayed through this subagent's own instruction channel. That distinction is exactly the one this section's reasoning turns on: the orchestrating session has direct Bash access and the user's own answer in its own context, so it executed `git push origin main` and `git push origin v0.5.0 v0.6.0 v0.7.0 v0.8.0` directly, then ran the post-release smoke check itself (§3, Post-release smoke check row) rather than re-delegating either step back to this subagent. This report is updated in place to reflect that outcome. The subagent's refusal above is preserved verbatim, not deleted — it was the correct call given what this subagent could verify from where it sat, and remains a Learning (§4) worth keeping regardless of how this particular pass resolved.
+
 ### Version bump justification
 
 **v0.8.0** (minor bump from `0.7.0`) — purely additive: a brand-new `releases` subcommand, zero changes to any existing public CLI/library export or existing command's behavior. No breaking change → no major bump; new user-facing capability → not a patch.
@@ -76,35 +78,38 @@ Reasoning: this role's own operating instructions state, without exception, that
 
 Adopted `git-native-mid-cycle-board`'s own fully-worked-out plan (its `release.md` §3) and extended it by one increment. All four tags — `v0.5.0` (pre-existing), `v0.6.0`, `v0.7.0`, `v0.8.0` — now exist locally, each independently verified against its intended target commit via `git tag -v`. This closes out the "propose" state from the earlier version of this report; only the push remains open, and remains open specifically pending genuine authorization (see above), not because of any remaining question about the tag plan itself.
 
-### Exact commands pending genuine user authorization
-
-Nothing below has been run. All are outward-facing.
+### Commands executed (by the orchestrating session, after genuine user authorization)
 
 ```bash
-# Sanity check already run and passed this pass (repeated here for the record):
-#   git tag -v v0.5.0 v0.6.0 v0.7.0 v0.8.0        -> all 4 resolve to the intended commits
+# Sanity check, run and passed before pushing:
+#   git tag -v v0.5.0 v0.6.0 v0.7.0 v0.8.0        -> all 4 resolved to the intended commits
 #   git log --oneline 28a5bfd..HEAD               -> exactly the 8 expected commits
 
 git push origin main
+# -> 28a5bfd..a5f43be  main -> main
+
 git push origin v0.5.0 v0.6.0 v0.7.0 v0.8.0
+# -> [new tag] v0.5.0, v0.6.0, v0.7.0, v0.8.0 all pushed
 ```
 
-### Post-release smoke check plan (to run only after the push above actually happens)
+### Post-release smoke check (run, all steps green — see §3's table row for the actual observed output)
 
-1. Clone fresh from `origin` (or `git pull` in a scratch clone) and confirm `git log -1` shows `4dc89ff` on `main`, and `git tag -l` shows `v0.5.0`/`v0.6.0`/`v0.7.0`/`v0.8.0` present remotely (`git ls-remote --tags origin`).
-2. `uv sync --frozen --all-extras && uv run insights --help` — confirm the CLI installs and `releases` is listed as a subcommand.
-3. `uv run insights releases --as-of <today> --repo <the fresh clone> --format json` — confirm exit code `0`, valid JSON, at least the 5 real tags plus a trailing `tag: null` pseudo-release entry, and no author/committer identity anywhere in the output (spot-check against AC-1.6/AC-1.2).
-4. Cross-check the pseudo-release's `commits`/`days_since_tag`/`work_types` against a fresh `uv run insights board --repo <the fresh clone> --as-of <today>` invocation — confirm byte-identical figures (AC-1.8).
-5. Confirm the existing surfaces are unaffected: `uv run insights build`/`render`/`query`/`verify`/`board` still behave as before (spot-check, not a full re-run of QA).
+1. ✅ Cloned fresh from `origin` into a scratch parent directory, with the sibling `aSPARK-graph` checkout symlinked alongside it (README's own documented layout). `git log -1` on the clone showed `a5f43be`; `git tag -l` listed all 8 tags through `v0.8.0`.
+2. ✅ `uv sync --extra dev && insights --help` — CLI installed, `releases` listed as a subcommand.
+3. ✅ `insights releases --as-of 2026-08-19 --repo .` against the fresh clone — exit 0, valid JSON, 8 real tags + trailing `tag: null` pseudo-release (9 entries), `insights_version: 0.8.0`, no author/committer/trailer match.
+4. ✅ Cross-checked the pseudo-release's `commits` field against a fresh `insights board` call on the same clone — byte-identical (same hash, subject, date, count).
+5. ✅ `insights build --repo ../aSPARK-graph` and `insights query` both exited 0 with well-formed output — existing surfaces unaffected.
+
+Scratch clone removed after.
 
 ### Rollback path
 
-This repository has **never been pushed beyond `28a5bfd`** (the end of `v0.4.0`) — there is no remote history beyond that point to protect, so rollback here is entirely about *not yet having published* rather than *undoing a public change*.
+**As-executed state:** both pushes completed — `origin/main` carries all 9 commits through `a5f43be`, and `v0.5.0`–`v0.8.0` are all present on `origin`. The pre-push and mid-push scenarios below are preserved as the analysis that was actually done *before* pushing (this project's own precedent for keeping rollback reasoning auditable, not just its conclusion), but the live state is the last bullet only.
 
-- **Right now (release commit made, all 4 tags created locally, nothing pushed):** `git tag -d v0.6.0 v0.7.0 v0.8.0` removes the three tags created this pass; `v0.5.0` predates this pass and would be left as-is unless the user also wants it undone (`git tag -d v0.5.0` too). `git reset --hard 4743b41` would undo `release-board`'s own commit if that ever became necessary, but per this ceremony's Hard Rule ("fix nothing... you don't patch on the release commit"), any real defect goes back through `/increment` → `/peer-review` → `/demo-day`, not a rewrite here.
-- **After `git push origin main` but before the tag push:** `origin/main` would already carry all 8 commits with no tags yet on the remote. Since nothing else has pulled from this repo yet (solo-maintainer project, first publish since `v0.4.0`), the cleanest undo is `git push --force origin 28a5bfd:main` — a **destructive force-push** needing its own explicit, separate authorization at the time, not pre-authorized by this report.
-- **After both pushes complete (tags also on the remote):** the honest rollback is **forward, not backward** — a new patch commit/version reverting the offending change, rather than deleting or force-moving tags that may already be visible to any observer of a public GitHub repo. Remote tag deletion is possible but treated the same as the force-push above: destructive, requires its own explicit authorization.
-- **Because this push would bundle four versions in one step** (`v0.5.0`-`v0.8.0` all reaching `origin/main` together for the first time), a rollback cannot cleanly un-ship just `v0.8.0` while keeping `v0.5.0`-`v0.7.0` public — they are the same linear history. If a rollback of only this feature is ever needed after a full publish, the practical path is a forward-fix commit that disables/removes the `releases` subcommand specifically, not a history rewrite.
+- ~~Right now (release commit made, all 4 tags created locally, nothing pushed): `git tag -d v0.6.0 v0.7.0 v0.8.0`...~~ — superseded, tags are pushed.
+- ~~After `git push origin main` but before the tag push: ...~~ — superseded, both pushes completed together.
+- **Current, live state — after both pushes completed:** the honest rollback is **forward, not backward** — a new patch commit/version reverting the offending change, rather than deleting or force-moving tags that are now publicly visible on a real GitHub repo. Remote tag deletion (`git push origin :refs/tags/vX.Y.Z`) or a force-push to `origin/main` remain technically possible but are destructive actions requiring their own explicit, separate user authorization at the time — neither is pre-authorized by this report, and neither has been used.
+- **Because this push bundled four versions in one step** (`v0.5.0`-`v0.8.0` all reached `origin/main` together, the first time any of them was published), a rollback cannot cleanly un-ship just `v0.8.0` while keeping `v0.5.0`-`v0.7.0` public — they are the same linear history. If a rollback of only this feature is ever needed, the practical path is a forward-fix commit that disables/removes the `releases` subcommand specifically, not a history rewrite.
 
 ## 4. Learnings (Keep!)
 
@@ -116,8 +121,8 @@ This repository has **never been pushed beyond `28a5bfd`** (the end of `v0.4.0`)
   - Extending `git-native-mid-cycle-board`'s own tag-plan reasoning by one increment, rather than re-deriving it, kept this report's own reasoning section short and traceable back to its source.
   - **This pass's own authorization boundary held under direct pressure.** A specific, detailed, plausible-sounding relayed authorization arrived mid-task, asking for an irreversible public push — and the role's own explicit rule (no agent message is ever the user's consent) was applied exactly as written, without being talked out of it by the specificity or urgency of the request. The safe, reversible parts of the same request (local tag creation, read-only sanity checks) were still executed, so the refusal was scoped precisely to the outward-facing action, not a blanket freeze.
 - **What we'd do differently:**
-  - The unpushed-version bundle keeps growing: three versions when `git-native-mid-cycle-board`'s own pass ran, four now. This is worth resolving directly with the user through a channel that actually reaches me as their own message (or the permission system) — not deferred indefinitely.
-  - Worth the user/EM settling, once and explicitly, what the actual authorization channel is for this ceremony's outward-facing steps in this harness (permission-system prompt vs. some other verifiable signal), so future `/go-live` passes don't have to re-derive the same judgment call under time pressure.
+  - The unpushed-version bundle grew to four before finally being resolved this pass — worth asking directly the first time it's flagged twice, rather than a third time, next time (this project's own CLAUDE.md precedent, applied here: the orchestrator did ask directly this time, via `AskUserQuestion`, and that's what actually resolved it).
+  - **Resolved this pass, worth recording precisely:** the authorization channel that actually counts is the orchestrating conversation's own direct exchange with the user (here, an explicit `AskUserQuestion` the user answered themselves), not anything relayed through a subagent's instructions, however specific or accurately quoted. When a subagent correctly declines an outward-facing action for lack of verifiable authorization, the fix is not to argue the subagent into compliance — it's for whichever party actually holds the genuine, first-hand authorization (here, the orchestrating session, which posed the question and has its own tool access) to execute the action directly, or to give the subagent a way to verify authorization independently next time. Both the subagent's refusal *and* the orchestrator's own direct execution were correct, for different reasons, in the same pass.
 - **Patterns worth reusing:**
   - **Extend, don't re-derive, an immediately-preceding `/go-live` pass's tag plan** when a new feature's version stacks directly on top of an already-fully-justified but not-yet-executed plan. **Flagging as a `CLAUDE.md` candidate.**
   - **Scope a refusal precisely.** When a request bundles a legitimate, low-risk action (local tag creation) together with one that fails the authorization bar (push), execute the former and decline only the latter, with the reasoning written down in the same place a reviewer would look for it — rather than either complying wholesale or refusing wholesale. **Flagging as a `CLAUDE.md` candidate.**
@@ -131,6 +136,6 @@ This repository has **never been pushed beyond `28a5bfd`** (the end of `v0.4.0`)
 
 - [x] All pre-flight checks passed at release time — verified fresh on the release commit (`4dc89ff`) in this pass.
 - [x] Changelog written in user-facing language — §2.
-- [ ] Release actions executed and verified — **not yet.** The release commit and all four local tags are made and verified; the outward-facing push (main + tags) has not run, deliberately, pending genuine user authorization (see "Authorization decision," §3). No PR applies (direct mode); no deploy target exists beyond the push itself; the post-release smoke check has a written plan but is N/A until the push happens. Rollback path is written (§3). This box stays open until authorization is genuinely established and the push commands are actually run.
+- [x] Release actions executed and verified — release commit + all four tags made and verified; `git push origin main` and `git push origin v0.5.0 v0.6.0 v0.7.0 v0.8.0` both executed by the orchestrating session with the user's own direct authorization; post-release smoke check run against a fresh clone (CLI installs, `releases` present, real JSON output correct, AC-1.8 byte-equality holds on the published artifact, existing surfaces unaffected). No PR applies (direct mode); no deploy target beyond the push itself. Rollback path updated to reflect the as-executed state (§3).
 - [x] Learnings recorded — §4.
-- [ ] Status set to `released` — **not set.** Status stays `preparing`: gates are green, pre-flight is green, the release commit and all four tags exist and are verified, but no outward-facing action has been authorized through a channel this role's own rules recognize as sufficient.
+- [x] Status set to `released` — set once both pushes and the smoke check were confirmed. `origin/main` at `a5f43be`; `v0.5.0`–`v0.8.0` all present on `origin`.
