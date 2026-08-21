@@ -121,10 +121,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p_releases.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads local git plumbing and .spark/ directory names only — never the graph.")
     p_releases.add_argument(
         "--output", default=None,
-        help="Accepted for flag parity with other subcommands; unused this cycle — "
-             "--format json (the only value) always writes to stdout, never to disk.",
+        help="Where to write release-board.html for --format html (default: --repo). "
+             "Ignored for --format json, which writes nothing.",
     )
-    p_releases.add_argument("--format", choices=("json",), default="json", help="Output format (default and only value this cycle: json).")
+    p_releases.add_argument("--format", choices=("json", "html"), default="json", help="Output format (default: json).")
 
     return parser
 
@@ -256,7 +256,16 @@ def _cmd_board(args: argparse.Namespace) -> int:
 
 def _cmd_releases(args: argparse.Namespace) -> int:
     release_map = build_release_map(args.repo, args.as_of)
-    print(canonical_json(release_map), end="")
+    if args.format == "json":
+        print(canonical_json(release_map), end="")
+        return 0
+    # --format html: render the self-contained release-board.html and report
+    # its path as JSON on stdout (write location honors --output, defaulting
+    # to --repo) — mirrors _cmd_board's own html branch.
+    from aspark_insights.gitboard.releaseboard_report import run_release_board_report
+
+    path = run_release_board_report(release_map, args.output or args.repo)
+    print(canonical_json({"report": str(path)}), end="")
     return 0
 
 

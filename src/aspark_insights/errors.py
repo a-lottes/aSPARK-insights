@@ -96,3 +96,22 @@ class SparkDirUnreadableError(InsightsError):
     filesystem access failure, not a git one."""
 
     reason = "spark_dir_unreadable"
+
+
+class ReleaseMapUnreadableError(InsightsError):
+    """A `build_release_map()` dict passed to the release-board HTML
+    renderer has an unexpected shape — the exact mirror of
+    `BoardUnreadableError`, itself introduced for `report.py`'s identical
+    render-shape guard (release-board-html plan.md §2)."""
+
+    reason = "release_map_unreadable"
+
+
+class ReportUnwritableError(InsightsError):
+    """`--output`'s resolved report path could not be created or written —
+    e.g. a path component that is already a regular file, or a permission
+    error. Distinct from `ReleaseMapUnreadableError`/`BoardUnreadableError`
+    (a data-shape problem): this is a filesystem write failure on an
+    otherwise-valid render (review F1)."""
+
+    reason = "report_unwritable"

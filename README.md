@@ -2,10 +2,11 @@
 
 > **Real, hand-verifiable engineering metrics computed from your repo's actual delivery graph — never a second-guessed number, never a fabricated one.**
 
-> **Project status: shipped at `v0.8.0` — real traceability coverage, a
+> **Project status: shipped at `v0.9.0` — real traceability coverage, a
 > self-contained HTML report, an MCP query tool, honest nulls throughout, a
-> git-native mid-cycle board, and a release board that maps every git tag to
-> the SPARK features that shipped in it.**
+> git-native mid-cycle board, and a release board (JSON and a self-contained
+> dark-theme HTML page) that maps every git tag to the SPARK features that
+> shipped in it.**
 > You can build a snapshot today and get real Story→Task, AC→QA and Task→Code
 > coverage numbers, each with its own sample size, computed against
 > [aspark-graph](https://github.com/a-lottes/aSPARK-graph)'s facts, then render
@@ -190,7 +191,15 @@ directories that shipped in it, unattributed commits, and each feature's own
 `spec`/`plan`/`review`/`qa`/`release` status:
 
 ```bash
+# JSON: the machine-readable release map
 uv run insights releases --as-of 2026-08-19 --repo /path/to/any/git/repo
+
+# HTML: the same data as one self-contained, offline dark-theme page —
+# index of every release with drill-down into each one's members and
+# their 5-artifact status, static #-anchor navigation, zero JavaScript
+uv run insights releases --as-of 2026-08-19 --repo /path/to/any/git/repo \
+                          --format html --output /tmp/releases-scratch
+# writes /tmp/releases-scratch/.aspark-insights/release-board.html
 ```
 
 Like `insights board`, this never reads the graph and never invents a
@@ -238,6 +247,10 @@ recomputed a second way.
       open window since the latest one) to the `.spark/<feature>/`
       directories that shipped in it and each one's own artifact status
       (`v0.8.0`)
+- [x] Release board HTML — `insights releases --format html`, a self-
+      contained dark-theme offline render matching the live aSPARK brand
+      site: index of every release with drill-down into members and
+      5-artifact status, zero JavaScript (`v0.9.0`)
 - [ ] Flow/cycle-time metrics — blocked on `aspark-graph` shipping
       release/commit time data
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene
