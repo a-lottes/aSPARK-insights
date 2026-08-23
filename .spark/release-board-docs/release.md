@@ -5,8 +5,8 @@
 | **Phase** | Keep |
 | **Owner** | Release Manager (`/go-live`) |
 | **Input** | `review.md` (`passed`), `qa.md` (`passed`) |
-| **Status** | `preparing` |
-| **Version** | v0.10.0 (release commit + local tag created — see §3; not yet pushed) |
+| **Status** | `released` |
+| **Version** | v0.10.0 (released — pushed to `origin/main`, tag `v0.10.0` pushed) |
 | **Date** | 2026-08-23 |
 
 <!-- Handoff: read this block first, the numbered sections below by exception. Whoever
@@ -15,23 +15,23 @@
      per-round log; a stale block is a defect, not a cosmetic issue. -->
 
 **Handoff**
-- **Status:** `preparing` — release commit made (`6201553`), local annotated tag `v0.10.0`
-  created and verified (`git tag -v` resolves, tagger `Andreas Lottes <andreas@lottes.dev>`,
-  target `6201553`, no GPG signature — matches this repo's existing tag norm on every prior tag,
-  not a new gap). **Push deliberately not executed.** Both gates are green (`review.md`
-  `passed`, `qa.md` `passed`) and fresh pre-flight (586 tests, clean build, byte-identical JSON
-  order) passed on this exact commit. Direct mode (no `Delivery & Handoff` section in
-  `.spark/constitution.md`), matching both prior `release-board*` cycles.
+- **Status:** `released`. The user gave explicit publish authorization in this conversation
+  ("yes"); the orchestrator executed the push directly (holding that first-hand authorization
+  plus direct tool access), the same division of labor established as correct across every
+  prior `release-board*` cycle.
 - **Summary:** Release board's HTML view now orders newest-first and lets the maintainer read
   any feature's actual spec/plan/review/qa/release document content in place, structured via a
   new bounded Markdown renderer — plus a mid-cycle symlink-escape security fix and a mobile
-  CSS wrap fix. Shipped as v0.10.0 (minor, additive, backward-compatible). Local commit and tag
-  prepared; push held for the user's explicit go, per this role's mandate that outward-facing
-  actions require authorization relayed by the caller, not inferred from a task instruction to
-  "prepare."
-- **Open:** `1 outstanding` — the user's explicit go to run the four pending publish commands
-  in §3 (`git push origin main`, `git push origin v0.10.0`, plus the post-push smoke check).
-  Nothing else is outstanding; there is no `handed-off` mode here (direct mode).
+  CSS wrap fix. Shipped as v0.10.0 (minor, additive, backward-compatible). Release commit
+  `6201553` + docs commit `c72259a` + annotated tag `v0.10.0` pushed to `origin`
+  (`385c1ea..c72259a` on `main`). **Post-release smoke check run and green** (§3): a fresh
+  `git clone` of `origin` at the pushed tag, `uv sync`, confirms `aspark_insights.__version__ ==
+  "0.10.0"`, `insights releases --format html` produces a valid page (doctype, inline logo,
+  "newest first" lead sentence, 50 `<details class="doc-content">` blocks), and
+  `--format json` still exits 0 with `v0.1.0` first (order genuinely untouched).
+- **Open:** none for this feature. Unrelated: the pre-existing untracked
+  `.spark/git-native-mid-cycle-board/release.md` remains untouched, flagged again in §4 as a
+  cleanup item now spanning three release cycles unaddressed.
 - **Binding ruling:** §3 Release Actions and the KEEP GATE below carry the final ruling.
 - **On conflict:** the numbered body below wins for everything except `Status`/`Version`; log
   the mismatch as a finding at the next `/go-live` and proceed — don't stop on it.
@@ -110,18 +110,20 @@
 
 | Action | Result |
 |---|---|
-| Version bump & tag | Version bump already present in-tree and verified correct before committing (`0.9.0` → `0.10.0` in `pyproject.toml`, `__init__.py`, and `uv.lock`'s own entry). **Justification (semver, minor bump):** three additive, backward-compatible behavior changes (index reorder, new document-viewing capability, structured Markdown rendering) plus a security fix and a CSS wrap fix bundled into the same release — no breaking change to any existing CLI flag, subcommand behavior (`--format json` stdout proven byte-identical in order), or public API signature; `library`-lens NFR-3 explicitly requires additive-only exports, which held. Per this project's own precedent (`public-repo-polish` shipped with *no* bump because it changed no behavior; both prior `release-board` cycles bumped minor for the same class of additive change), a minor bump is correct here too. **Executed this pass:** release commit `6201553` created (all feature files, `.spark/git-native-mid-cycle-board/release.md` explicitly excluded); local annotated tag `v0.10.0` created and verified against `6201553` via `git tag -v`. **Not executed:** `git push origin main`, `git push origin v0.10.0` — held pending the user's explicit go. |
+| Version bump & tag | Version bump already present in-tree and verified correct before committing (`0.9.0` → `0.10.0` in `pyproject.toml`, `__init__.py`, and `uv.lock`'s own entry). **Justification (semver, minor bump):** three additive, backward-compatible behavior changes (index reorder, new document-viewing capability, structured Markdown rendering) plus a security fix and a CSS wrap fix bundled into the same release — no breaking change to any existing CLI flag, subcommand behavior (`--format json` stdout proven byte-identical in order), or public API signature. Release commit `6201553` + docs commit `c72259a`; annotated tag `v0.10.0` on `6201553`. **Pushed** to `origin` (`git push origin main` moved `origin/main` `385c1ea..c72259a`; `git push origin v0.10.0` published the tag). |
 | PR / merge | N/A — direct mode (no `Delivery & Handoff` section in `.spark/constitution.md`; matches both prior `release-board*` cycles, which also released direct-to-`main`). |
-| Deploy | **Not yet run — awaiting explicit user go.** Pending outward-facing commands: `git push origin main` and `git push origin v0.10.0`. No deploy target beyond the git remote exists for this CLI/library project (no hosted service, no package registry publish declared for this project). |
-| Post-release smoke check | **Not yet run** — this step only makes sense after the tag is pushed. Planned smoke check once authorized: (1) `uv run insights releases --as-of <today> --format html --output <scratch-dir>` from a fresh clone/checkout of the pushed tag, confirm exit 0 and a `release-board.html` file is written; (2) open the file and confirm the index reads newest-first, at least one feature's document expands with real structured content (not raw markdown), and a deliberately-broken/missing artifact case (if any exists in the real repo) shows an honest notice rather than a blank section; (3) confirm `uv run insights releases --as-of <today> --format json` still exits 0 with unchanged field shape; (4) confirm no console/log noise from the CLI itself (exit code and stdout only, per the C2 idiom). |
+| Deploy | This project's "deploy" is the git push itself (no PyPI target). **Done** — see above. |
+| Post-release smoke check | **Run, green.** Fresh `git clone` of `origin` at the pushed tag `v0.10.0`, `uv sync` succeeded, `uv run python -c "import aspark_insights; print(aspark_insights.__version__)"` → `0.10.0`. `uv run insights releases --as-of 2026-08-24 --format html` produced a 1,420,633-byte valid page: doctype present, inline logo present, lead sentence reads "newest first," 50 `<details class="doc-content">` blocks (document-viewing capability live). `uv run insights releases --as-of 2026-08-24 --format json` exits 0, 11 releases (grew by one — this release's own tag now counts), first entry `v0.1.0` confirming the underlying list order is still oldest-first/untouched by the HTML reorder. Temporary clone removed after verification. |
 
-**Exact pending commands (none executed yet — held for explicit user authorization):**
-```
+**Commands executed, on the user's explicit go ("yes"):**
+```bash
 git push origin main
+# 385c1ea..c72259a  main -> main
+
 git push origin v0.10.0
+# * [new tag]         v0.10.0 -> v0.10.0
 ```
-(Local, reversible commands already executed this pass, for the record: `git commit` producing
-`6201553`, and `git tag -a v0.10.0 -m "release-board-docs v0.10.0"` — see the block above.)
+Both ran successfully; no errors, no force flags, no history rewrite.
 
 ## 4. Learnings (Keep!)
 
@@ -183,32 +185,22 @@ git push origin v0.10.0
   copied from `review.md`/`qa.md` (586 passed, clean build, version consistent, JSON order
   independently re-verified unchanged)
 - [x] Changelog written in user-facing language — §2, no commit hashes/ticket IDs/internal jargon
-- [ ] Release actions executed and verified (or `aborted` with reason) — **partially executed,
-  deliberately**: the local, reversible half (release commit `6201553`, local tag `v0.10.0`) is
-  done and verified; the outward-facing half (push to `origin`) is correctly held pending the
-  user's explicit go — a reportable, non-failure state per this role's own mandate, not an
-  oversight. This box stays unchecked until push + the post-release smoke check in §3 actually
-  run.
+- [x] Release actions executed and verified — push to `origin main`, tag `v0.10.0` pushed,
+  post-release smoke check run green from a fresh clone at the pushed tag (§3)
 - [x] Learnings recorded — §4
-- [ ] Status set to `released` — **not yet**; status is `preparing` pending the user's go. (Direct
-  mode: no `handed-off` status applies here — no `Delivery & Handoff` section exists in
-  `.spark/constitution.md`.)
+- [x] Status set to `released` — the user gave explicit publish authorization in this
+  conversation ("yes"); all outward-facing actions completed and verified
 
-**Rollback path (documented before any publish, per this role's Hard Rules):**
+**Rollback path:**
 This feature is entirely additive/confined to the `releases --format html` code path plus two new
 modules (`gitboard/artifactcontent.py`, `gitboard/markdownlite.py`); `--format json` is untouched
 (independently re-verified in §1). It writes only one output file at render time
 (`release-board.html`, same as `v0.9.0`) and reads existing `.spark/` files — no data migration,
 no schema change, no persisted state beyond that one rendered file.
-- **Right now (commit + tag local, nothing pushed):** `git tag -d v0.10.0` then `git reset --hard
-  <the commit before 6201553>` cleanly discards both and restores `0.9.0`'s tree and behavior
-  exactly — nothing external has seen either artifact yet, so this is a zero-cost, fully clean
-  undo.
-- **After push (only relevant once the user's go is given and §3's pending commands run):**
-  `git revert 6201553` on `main` (not a force-push/history-rewrite) restores `0.9.0`'s behavior
-  forward, then delete and re-push the tag pointer only if genuinely necessary (`git tag -d
-  v0.10.0 && git push origin :refs/tags/v0.10.0`) — but since `main` is a shared branch, a
-  forward revert is strongly preferred over any rewrite. Because the feature only ever writes one
-  regenerated `release-board.html` file, there is no "stale data left behind" case: the very next
-  render (pre- or post-revert) fully regenerates that one file from source, with no migration or
-  backfill step required either direction.
+
+**Current, live state: pushed and released.** `main` and tag `v0.10.0` are both public on
+`origin`. If a problem surfaces: `git revert 6201553` on `main` (never a force-push/history-
+rewrite) restores `0.9.0`'s behavior forward; delete and re-push the tag pointer only if genuinely
+necessary. Because the feature only ever writes one regenerated `release-board.html` file, there
+is no "stale data left behind" case: the very next render (pre- or post-revert) fully regenerates
+that one file from source, with no migration or backfill step required either direction.
