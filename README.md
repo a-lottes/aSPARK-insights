@@ -2,10 +2,11 @@
 
 > **Real, hand-verifiable engineering metrics computed from your repo's actual delivery graph — never a second-guessed number, never a fabricated one.**
 
-> **Project status: shipped at `v0.9.0` — real traceability coverage, a
+> **Project status: shipped at `v0.10.0` — real traceability coverage, a
 > self-contained HTML report, an MCP query tool, honest nulls throughout, a
 > git-native mid-cycle board, and a release board (JSON and a self-contained
-> dark-theme HTML page) that maps every git tag to the SPARK features that
+> dark-theme HTML page, newest release first, each feature's own documents
+> viewable in place) that maps every git tag to the SPARK features that
 > shipped in it.**
 > You can build a snapshot today and get real Story→Task, AC→QA and Task→Code
 > coverage numbers, each with its own sample size, computed against
@@ -195,12 +196,26 @@ directories that shipped in it, unattributed commits, and each feature's own
 uv run insights releases --as-of 2026-08-19 --repo /path/to/any/git/repo
 
 # HTML: the same data as one self-contained, offline dark-theme page —
-# index of every release with drill-down into each one's members and
-# their 5-artifact status, static #-anchor navigation, zero JavaScript
+# newest release first, drill-down into each one's members and their
+# 5-artifact status, each artifact's own full document content expandable
+# in place (structured — real headings/tables/checklists, not raw
+# Markdown syntax), static #-anchor navigation, zero JavaScript
 uv run insights releases --as-of 2026-08-19 --repo /path/to/any/git/repo \
                           --format html --output /tmp/releases-scratch
 # writes /tmp/releases-scratch/.aspark-insights/release-board.html
 ```
+
+- **Newest release first.** The open pseudo-release window leads, then every
+  real tag newest-to-oldest — a display-order flip only; `--format json`'s
+  own order (and everything below the top level) is untouched.
+- **A feature's own documents, not just its status, are one click away.**
+  Selecting `spec.md`/`plan.md`/`review.md`/`qa.md`/`release.md` opens that
+  file's real content — its actual prose, tables and findings, not just the
+  extracted `Status`/`Date`. A feature that shipped in more than one release
+  shows its documents once, under its first (newest) appearance; every other
+  release links to it rather than repeating it. A document beyond a stated
+  size, or the page beyond a stated total weight, is disclosed as such —
+  never silently dropped, never grown without bound.
 
 Like `insights board`, this never reads the graph and never invents a
 release from a commit-message version string — a version only counts once
@@ -251,6 +266,10 @@ recomputed a second way.
       contained dark-theme offline render matching the live aSPARK brand
       site: index of every release with drill-down into members and
       5-artifact status, zero JavaScript (`v0.9.0`)
+- [x] Release board documents — newest-release-first ordering, plus each
+      feature's own spec/plan/review/qa/release document content viewable
+      in place (structured, real headings/tables/checklists), still one
+      self-contained offline file, zero new dependencies (`v0.10.0`)
 - [ ] Flow/cycle-time metrics — blocked on `aspark-graph` shipping
       release/commit time data
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene

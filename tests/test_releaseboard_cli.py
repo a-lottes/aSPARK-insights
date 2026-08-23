@@ -77,6 +77,36 @@ def test_releases_help_documents_html_format_and_output(tmp_path: Path):
     assert "--output" in result.stdout
 
 
+def test_releases_help_documents_document_embedding_and_bounds(tmp_path: Path):
+    """T11: --help must name that exactly one file is written and that it
+    embeds document content, bounded and disclosed."""
+    result = _run_cli(tmp_path, "releases", "--help")
+    assert result.returncode == 0
+    assert "document" in result.stdout.lower()
+    assert "disclosed" in result.stdout.lower() or "bounded" in result.stdout.lower()
+
+
+# --- T11: measured real page weight, against this repo itself ---------------
+
+
+def test_real_repo_rendered_page_is_within_the_5mb_ceiling(tmp_path: Path):
+    """A5: the page-weight ceiling this cycle set, verified against the
+    actual project repo, not a synthetic fixture — 1,314,560 bytes measured
+    on 2026-08-23 (plan.md §1), comfortably under the 5,000,000-byte bound.
+
+    Review F10: `--output` points at `tmp_path` — the version before this
+    fix wrote a real ~1.3MB `release-board.html` into this repo's own
+    working tree (`<repo>/.aspark-insights/`) on every test run."""
+    repo_root = Path(__file__).resolve().parent.parent
+    result = _run_cli(
+        repo_root, "releases", "--as-of", "2026-08-23", "--format", "html",
+        "--output", str(tmp_path),
+    )
+    assert result.returncode == 0, result.stderr
+    report_path = Path(json.loads(result.stdout)["report"])
+    assert report_path.stat().st_size <= 5_000_000
+
+
 # --- T9: hostile-input checklist on --repo, html format path ----------------
 
 

@@ -118,11 +118,15 @@ def _build_parser() -> argparse.ArgumentParser:
              "graph (source: git-interim, the documented ADR-2 fallback).",
     )
     p_releases.add_argument("--as-of", required=True, help="Date this map represents, YYYY-MM-DD (an input, never the wall clock).")
-    p_releases.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads local git plumbing and .spark/ directory names only — never the graph.")
+    p_releases.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads local git plumbing, .spark/ directory names, and (for --format html only) the contents of each feature's spec/plan/review/qa/release document — never the graph.")
     p_releases.add_argument(
         "--output", default=None,
         help="Where to write release-board.html for --format html (default: --repo). "
-             "Ignored for --format json, which writes nothing.",
+             "Always exactly one self-contained file, newest release first, "
+             "embedding each feature's own spec/plan/review/qa/release document "
+             "content (bounded per document and by total page weight, with any "
+             "excess disclosed, never silently dropped). Ignored for --format json, "
+             "which writes nothing.",
     )
     p_releases.add_argument("--format", choices=("json", "html"), default="json", help="Output format (default: json).")
 
@@ -261,10 +265,14 @@ def _cmd_releases(args: argparse.Namespace) -> int:
         return 0
     # --format html: render the self-contained release-board.html and report
     # its path as JSON on stdout (write location honors --output, defaulting
-    # to --repo) — mirrors _cmd_board's own html branch.
+    # to --repo) — mirrors _cmd_board's own html branch. Document collection
+    # (release-board-docs US-2) only ever runs on this branch — the json
+    # branch above never reads a single artifact document body.
+    from aspark_insights.gitboard.artifactcontent import collect_release_documents
     from aspark_insights.gitboard.releaseboard_report import run_release_board_report
 
-    path = run_release_board_report(release_map, args.output or args.repo)
+    documents = collect_release_documents(args.repo, release_map)
+    path = run_release_board_report(release_map, args.output or args.repo, documents)
     print(canonical_json({"report": str(path)}), end="")
     return 0
 

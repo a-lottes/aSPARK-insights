@@ -104,16 +104,54 @@ def test_style_block_defines_root_tokens():
         assert token in _STYLE
 
 
-# --- T1: index ordering and counts (AC-1.1/1.2) ------------------------------
+# --- T1: newest-first display order (AC-1.1/1.2/1.3/1.4) --------------------
 
 
-def test_index_lists_one_row_per_entry_in_given_order():
+def test_index_lists_newest_first_pseudo_then_reversed_real_tags():
+    """AC-1.1: the pseudo-release (`tag: null`) leads, then every real tag
+    reverses (newest first, oldest last) — the exact opposite of
+    `releases[]`'s own oldest-first/pseudo-last order."""
     releases = [_release("v0.1.0"), _release("v0.2.0"), _pseudo(previous_tag="v0.2.0")]
     text = render_release_board_html(_data(releases))
-    idx_v01 = text.index(">v0.1.0<")
-    idx_v02 = text.index(">v0.2.0<")
     idx_pseudo = text.index("Since v0.2.0")
-    assert idx_v01 < idx_v02 < idx_pseudo
+    idx_v02 = text.index(">v0.2.0<")
+    idx_v01 = text.index(">v0.1.0<")
+    assert idx_pseudo < idx_v02 < idx_v01
+
+
+def test_index_and_detail_cards_share_identical_display_order():
+    """AC-1.2: no mismatch between an index row's visual position and its
+    detail card's position — both iterate the same display order."""
+    releases = [_release("v0.1.0"), _release("v0.2.0"), _release("v0.3.0")]
+    text = render_release_board_html(_data(releases))
+    index_section, rest = text.split("</ul>", 1)
+    index_order = re.findall(r'href="#(rel-\d)"', index_section)
+    detail_order = re.findall(r'<article class="release-card" id="(rel-\d)"', rest)
+    assert index_order == detail_order == ["rel-2", "rel-1", "rel-0"]
+
+
+def test_anchors_still_identify_the_original_releases_list_entry():
+    """AC-1.1/1.2: display order changes, but each anchor (`rel-N`) still
+    points at its own original `releases[]` position — a reader following
+    an index link always lands on the matching detail card."""
+    releases = [_release("v0.1.0"), _release("v0.2.0"), _pseudo(previous_tag="v0.2.0")]
+    text = render_release_board_html(_data(releases))
+    # v0.1.0 is releases[0] -> rel-0; v0.2.0 is releases[1] -> rel-1; pseudo is releases[2] -> rel-2
+    assert '<li><a class="index-row" href="#rel-2"' in text
+    detail_v01 = text.split('id="rel-0"')[1].split("</article>")[0]
+    assert "v0.1.0-feature" in detail_v01  # the default member name from _release("v0.1.0")
+
+
+def test_lead_sentence_says_newest_first():
+    text = render_release_board_html(_data([_release("v1.0.0")]))
+    assert "newest first" in text
+    assert "oldest first" not in text
+
+
+def test_single_real_release_no_pseudo_renders_in_its_own_position():
+    text = render_release_board_html(_data([_release("v1.0.0")]))
+    assert 'id="rel-0"' in text
+    assert text.count("release-card") >= 1
 
 
 def test_index_row_counts_read_from_list_lengths_not_recomputed():
@@ -174,7 +212,7 @@ def test_single_member_exactly_one_member_block():
     release = _release("v0.5.0", members=[_member("measurement-honesty")])
     text = render_release_board_html(_data([release]))
     detail = text.split('id="rel-0"')[1].split("</article>")[0]
-    assert detail.count('<div class="member-block">') == 1
+    assert detail.count('<div class="member-block"') == 1
 
 
 def test_artifact_matrix_is_a_real_table_with_scope_and_caption():
@@ -393,7 +431,7 @@ def test_members_beyond_bound_are_truncated_and_disclosed(monkeypatch):
     release = _release("v1.0.0", members=[_member("a"), _member("b"), _member("c")])
     text = render_release_board_html(_data([release]))
     detail = text.split('id="rel-0"')[1].split("</article>")[0]
-    assert detail.count('<div class="member-block">') == 2
+    assert detail.count('<div class="member-block"') == 2
     assert "Showing the first 2 of 3" in detail
 
 
