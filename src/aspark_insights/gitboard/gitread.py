@@ -14,6 +14,7 @@ No call here ever asks git for an identity field (`%an`/`%ae`/`%cn`/`%ce`/
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime, timezone
 
 from aspark_insights.errors import GitUnavailableError, NotAGitRepoError
 
@@ -27,7 +28,22 @@ _FIELD_SEP = "\x1f"
 # instead silently substitutes the Unix epoch. Both are non-empty, truthy
 # strings that would otherwise slip past a plain `if raw:`/`is None` check.
 _UNEXPANDED_DATE_TOKEN = "%cI"
-_EPOCH_ISO_STRICT = "1970-01-01T00:00:00+00:00"
+_EPOCH_INSTANT = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _is_epoch_instant(iso_date: str) -> bool:
+    """CI fix: git's own zero-offset ISO-8601 rendering isn't stable across
+    versions — this project's git 2.39 renders the substituted epoch as
+    `1970-01-01T00:00:00+00:00`; CI's git 2.55 renders the same instant
+    differently (confirmed live: the exact-string match silently missed it,
+    letting a fabricated ~56-year-old age flow through as a real, readable
+    date instead of null). Comparing the *parsed instant* rather than one
+    hardcoded string form is correct regardless of which equivalent
+    rendering a given git version chooses."""
+    try:
+        return datetime.fromisoformat(iso_date) == _EPOCH_INSTANT
+    except ValueError:
+        return False
 
 
 class GitCommandFailed(Exception):
@@ -252,6 +268,6 @@ def list_branches(repo_root: str) -> list[dict]:
     out = _run(repo_root, "for-each-ref", f"--format={fmt}", "refs/heads/")
     records = _parse_records(out, ("name", "tip_hash", "tip_date"))
     for r in records:
-        if r["tip_date"] == _EPOCH_ISO_STRICT:
+        if _is_epoch_instant(r["tip_date"]):
             r["tip_date"] = ""
     return records
