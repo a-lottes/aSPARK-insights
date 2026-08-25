@@ -216,6 +216,26 @@ uv run insights releases --as-of 2026-08-19 --repo /path/to/any/git/repo \
   release links to it rather than repeating it. A document beyond a stated
   size, or the page beyond a stated total weight, is disclosed as such —
   never silently dropped, never grown without bound.
+- **A global figures band and a cadence strip sit above the index.** Tagged
+  release count, first/last date, the median and range of inter-release
+  gaps (each with its own `n`), features delivered, and total delivered
+  US/AC scope — every figure a measured number with its own denominator,
+  or `null` with a named reason, never an estimate and never a bare `0`
+  standing in for "unreadable". The cadence strip shows every gap as a
+  discrete number in text; the longest gap is called out by rank and text
+  weight only — one uniform colour serves every bar, regardless of value,
+  so nothing on this page ever reads as an undisclosed pass/fail verdict.
+  Below two measured gaps, the strip states that plainly and shows nothing.
+- **A feature counts as delivered exactly once — in its oldest release.**
+  Every later reappearance (typically its own trailing "record the release
+  report" commit) is labelled trailing, not delivering, so a release's own
+  delivered-scope figure is never inflated by bookkeeping commits.
+  Document viewing is unaffected and stays anchored to the *newest*
+  occurrence — these are deliberately different, both-correct answers to
+  different questions, not the same rule applied twice. Each real release's
+  card also opens with its own figures: date, gap to its predecessor
+  (`null` with a reason for the earliest tag, never a `0`), delivering vs.
+  trailing features, delivered scope, and its commit/work-type mix.
 
 Like `insights board`, this never reads the graph and never invents a
 release from a commit-message version string — a version only counts once
@@ -270,6 +290,11 @@ recomputed a second way.
       feature's own spec/plan/review/qa/release document content viewable
       in place (structured, real headings/tables/checklists), still one
       self-contained offline file, zero new dependencies (`v0.10.0`)
+- [x] Release metrics — a global figures band and cadence strip above the
+      index (release count, date span, gap median/range, delivered scope),
+      delivery-vs-trailing attribution so a feature's scope counts once,
+      in its oldest release, and a per-release figures header on each
+      card — no health/pass-fail verdict, no trend line, ever (`v0.11.0`)
 - [ ] Flow/cycle-time metrics — blocked on `aspark-graph` shipping
       release/commit time data
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene

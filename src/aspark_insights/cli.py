@@ -118,7 +118,7 @@ def _build_parser() -> argparse.ArgumentParser:
              "graph (source: git-interim, the documented ADR-2 fallback).",
     )
     p_releases.add_argument("--as-of", required=True, help="Date this map represents, YYYY-MM-DD (an input, never the wall clock).")
-    p_releases.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads local git plumbing, .spark/ directory names, and (for --format html only) the contents of each feature's spec/plan/review/qa/release document — never the graph.")
+    p_releases.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads local git plumbing, .spark/ directory names, each feature's own spec.md for its US/AC scope count, and (for --format html only) the full contents of each feature's spec/plan/review/qa/release document — never the graph.")
     p_releases.add_argument(
         "--output", default=None,
         help="Where to write release-board.html for --format html (default: --repo). "

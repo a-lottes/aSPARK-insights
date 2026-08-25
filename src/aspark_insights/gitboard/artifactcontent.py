@@ -3,11 +3,17 @@ document bodies (release-board-docs, US-2).
 
 Kept separate from `artifactstatus.py` deliberately: that module's
 docstring makes "no other section of the body is parsed, at all" a
-load-bearing promise for the JSON path (`build_release_map()`), and
-`build_release_map` must keep that exact behavior unchanged (CLAUDE.md's
-"don't over-generalize a fix onto callers that never asked for it"). This
-module only ever runs on the `--format html` branch, never on the JSON
-path — `build_release_map()` never imports it.
+load-bearing promise for `artifactstatus.py`'s own header-table-only
+extraction, and `build_release_map` must keep that exact behavior
+unchanged (CLAUDE.md's "don't over-generalize a fix onto callers that
+never asked for it"). This module (the *full* 5-artifact document body)
+only ever runs on the `--format html` branch, never on the JSON path —
+`build_release_map()` never imports it. Review F9: as of release-metrics,
+`build_release_map()`'s JSON path does read one narrow slice of one body
+— `gitboard/scopecount.py` counts `spec.md`'s own `### US-N`/`- [ ] AC-`
+lines for the delivered-scope figures — a separate, deliberate, plan-
+recorded exception to the header-table-only promise above, not this
+module's own reuse of it.
 """
 
 from __future__ import annotations

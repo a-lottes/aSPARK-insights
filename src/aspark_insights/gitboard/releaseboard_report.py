@@ -150,7 +150,35 @@ _STYLE = """
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   .doc-back-link { font-size: 0.8rem; display: inline-block; margin-top: 0.5rem; }
   .doc-content-link { color: var(--text-secondary); font-size: 0.88rem; margin: 0.4rem 0; }
+  /* T7/AC-3.1, T10/AC-4.1: real <dl> label/value pairs — reuses the
+     shipped .index-list auto-fit grid idiom so the band wraps to
+     multiple rows at narrow widths instead of one unbreakable row
+     (design finding 4, this page's own prior 375px defect). */
+  .figures-band { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.9rem 1.5rem; margin: 1rem 0 1.5rem; padding: 1.1rem 1.3rem; background: var(--bg-card);
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
+  .figures-band dt { font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase;
+    letter-spacing: 0.04em; margin: 0; }
+  .figures-band dd { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0.15rem 0 0; }
+  .release-figures dd { font-size: 0.95rem; }
+  /* T8/AC-3.2/NFR-5: exactly one class, one hue, for every bar regardless
+     of value — a value-dependent color here would read as an undisclosed
+     pass/fail verdict (constitution §3/§6). The longest gap is marked by
+     rank only (bold text + the word "longest"), never by this bar's
+     color or width alone — every gap is also a plain number in the
+     preceding cell. */
+  .cadence-bar { display: block; height: 0.6rem; min-width: 2px; background: var(--accent-teal);
+    border-radius: 100px; }
 """
+
+
+def _scope_text(us: int, acs: int) -> str:
+    """Review F12: `acs` singularizes like the existing `commit`/`commits`
+    idiom (`_pseudo_stats_line`) — `"1 AC"`, never `"1 ACs"`. `us` stays
+    the fixed abbreviation `US` regardless of count, matching this
+    project's own spec/plan usage (`"1 US"`, not `"1 USs"`)."""
+    ac_word = "AC" if acs == 1 else "ACs"
+    return f"{us} US / {acs} {ac_word}"
 
 
 def _release_anchor(index: int) -> str:
@@ -359,22 +387,23 @@ def _render_documents_for_member(
     entry = plan.get(name)
     if entry is None:
         return ""
+    note = _trailing_note(member)
     if entry["home_index"] != original_index:
         home_label = _esc(_release_label(releases[entry["home_index"]]))
         # Review F13: links directly to the member block itself, not just
         # the release card — a card can hold up to 50 members.
         home_anchor = _esc(entry["home_anchor"])
-        return (
+        return note + (
             f'<p class="doc-content-link">Documents shown under '
             f'<a href="#{home_anchor}">{home_label}</a>.</p>\n'
         )
     if not entry["embedded"]:
-        return (
+        return note + (
             '<p class="empty-notice">Not embedded in this page &mdash; the page-weight budget '
             f'was reached before reaching this feature\'s documents. Read each one directly at '
             f'<code>{_SPARK_DIRNAME}/{_esc(name)}/{{spec,plan,review,qa,release}}.md</code>.</p>\n'
         )
-    return (
+    return note + (
         _render_document_details(name, entry["k"], documents)
         + f'<a class="doc-back-link" href="#{_esc(member_anchor)}">&uarr; Back to {_esc(name)}</a>\n'
     )
@@ -391,6 +420,7 @@ def _render_member_block(
     return (
         f'<div class="member-block" id="{_esc(member_anchor)}">\n'
         f'<h4 class="member-name">{_esc(member["name"])}</h4>\n'
+        f"{_delivery_clause(member)}"
         f"{_render_artifact_table(member)}"
         f"{doc_section}"
         "</div>\n"
@@ -445,24 +475,42 @@ def _render_unattributed_section(release: dict) -> str:
     return body
 
 
+def _work_types_value(release: dict) -> str:
+    """Shared with `_work_types_clause` below (review F8: `_render_release_
+    figures` used to re-derive this by string-slicing `_work_types_clause`'s
+    own sentence and collapsing every "nothing to show" case — key absent,
+    or `worktype.breakdown` itself returning an honest null — into one
+    generic message, discarding `breakdown`'s own specific reason). Returns
+    the bare legend text, or the most specific reason available; never a
+    guess, never generic when a real reason exists. Fixed declared order
+    (`RECOGNIZED_TYPES`, then `unclassified`) — the same order `report.py`'s
+    own confidence-mix legend uses — never raw dict iteration order
+    (NFR-6)."""
+    wt = release.get("work_types")
+    if wt is None:
+        return "not classifiable for this range"
+    if wt["value"] is None:
+        return wt["reason"] or "not classifiable for this range"
+    order = (*RECOGNIZED_TYPES, "unclassified")
+    present = [(t, wt["value"][t]) for t in order if t in wt["value"]]
+    if not present:
+        return "not classifiable for this range"
+    return ", ".join(f"{t} {pct}%" for t, pct in present)
+
+
 def _work_types_clause(release: dict) -> str:
     """AC-1.3: `work_types` is present on the pseudo-release exactly when
     `build_board()` itself includes it (conditional, same as
     `days_since_tag` — absent on too few classified commits or a
     zero-commit window, per `board.py`'s own `_build_work_types`), and
     review F5 caught that this renderer previously dropped it silently even
-    when present. Fixed declared order (`RECOGNIZED_TYPES`, then
-    `unclassified`) — the same order `report.py`'s own confidence-mix
-    legend uses — never raw dict iteration order (NFR-6)."""
+    when present. Empty (no clause at all) when there is genuinely nothing
+    to say — the `<dl>` header (`_render_release_figures`) always shows a
+    row instead, via `_work_types_value` directly."""
     wt = release.get("work_types")
     if wt is None or wt["value"] is None:
         return ""
-    order = (*RECOGNIZED_TYPES, "unclassified")
-    present = [(t, wt["value"][t]) for t in order if t in wt["value"]]
-    if not present:
-        return ""
-    legend = ", ".join(f"{t} {pct}%" for t, pct in present)
-    return f" Work types: {legend}."
+    return f" Work types: {_work_types_value(release)}."
 
 
 def _pseudo_stats_line(release: dict) -> str:
@@ -492,6 +540,131 @@ def _pseudo_stats_line(release: dict) -> str:
     )
 
 
+def _real_stats_line(release: dict) -> str:
+    """AC-1.1/1.2 (T1) + AC-1.3 (T2): a real release's own tag date and
+    commit count — the Must-level counterpart to `_pseudo_stats_line`,
+    reading `build_release_map`'s own `date`/`commit_count`/`work_types`
+    figures verbatim, never recomputed a second way. One `_esc` over the
+    whole sentence, same NFR-2 discipline as `_pseudo_stats_line`."""
+    date = release.get("date")
+    date_reason = release.get("date_reason") or "date unavailable"
+    # Review F6: the null branch must terminate its own sentence too, or the
+    # reason runs straight into the commit count ("...could not be read 1 commit.").
+    date_clause = f"Tagged {date}." if date is not None else f"{date_reason}."
+    commit_count = release["commit_count"]
+    commit_word = "commit" if commit_count == 1 else "commits"
+    work_types_clause = _work_types_clause(release)
+    return _esc(f"{date_clause} {commit_count} {commit_word}.{work_types_clause}")
+
+
+def _delivery_clause(member: dict) -> str:
+    """US-2/AC-2.1: `delivery` is a machine-readable field on `member`
+    (`build_release_map`'s own attribution, never re-derived here),
+    rendered as a plain-text label — "Delivering"/"Trailing" — never a
+    color- or icon-only cue. Carries the member's own `scope` (AC-3.6) so
+    a reader sees the number this member itself contributes, or its
+    honest null, next to the label."""
+    delivery = member["delivery"]
+    scope = member["scope"]
+    scope_text = (
+        _scope_text(scope["us"], scope["acs"]) if scope["us"] is not None
+        else _esc(scope["reason"] or "scope unavailable")
+    )
+    if delivery["delivering"]:
+        return f'<p class="stats-line">Delivering &mdash; {scope_text}.</p>\n'
+    if delivery["delivered_in"] is not None:
+        return (
+            '<p class="stats-line">Trailing &mdash; delivered in '
+            f'<code>{_esc(delivery["delivered_in"])}</code>.</p>\n'
+        )
+    return f'<p class="stats-line">{_esc(delivery["reason"])}</p>\n'
+
+
+def _trailing_note(member: dict) -> str:
+    """AC-2.7: a release card must never juxtapose a trailing member's
+    full, current document with a `0`-delivered figure and no
+    explanation. This note names the actual delivery release explicitly,
+    and is prepended in every one of the three document-viewing states
+    (embedded, linked-elsewhere, over-budget — T5 DoD), never only one of
+    them. Absent for a delivering member and for the pseudo-release's own
+    "not yet delivered" members (`delivered_in is None`) — there is no
+    delivery release to name in either case."""
+    delivery = member["delivery"]
+    if delivery["delivering"] or delivery["delivered_in"] is None:
+        return ""
+    return (
+        '<p class="doc-provenance">Trailing member &mdash; delivered in '
+        f'<code>{_esc(delivery["delivered_in"])}</code>; document shown as currently written.</p>\n'
+    )
+
+
+def _delivering_summary_line(release: dict) -> str:
+    """AC-2.6: a real release's delivering-member count, stated in words,
+    distinct from the member list itself (a trailing member still gets
+    its own block below — AC-2.1/AC-2.7) so an empty delivering set is
+    never conflated with the list being empty or a `null`+reason state.
+    Wording matches AC-2.6's own quoted text exactly."""
+    delivering = [m for m in release["members"] if m["delivery"]["delivering"]]
+    if not delivering:
+        return '<p class="stats-line">no feature was delivered in this release.</p>\n'
+    names = ", ".join(_esc(m["name"]) for m in delivering)
+    count_word = "feature" if len(delivering) == 1 else "features"
+    return f'<p class="stats-line">{len(delivering)} {count_word} delivered: {names}.</p>\n'
+
+
+def _render_release_figures(release: dict) -> str:
+    """US-4/AC-4.1: a real release's own per-card figures header — date,
+    gap to its predecessor (or its `null` reason, never a `0` — AC-4.2),
+    delivering vs. trailing features, delivered scope, commit count,
+    unattributed count, and work-type mix. One `<dl>` pass over
+    `build_release_map`'s own figures, nothing recomputed. Its own render
+    unit, called from exactly one line of `_render_release_detail` (plan
+    §1's severability decision — AC-4.4)."""
+    date = release.get("date")
+    date_display = date if date is not None else (release.get("date_reason") or "unavailable")
+
+    gap = release.get("gap_days")
+    gap_display = f"{gap} d" if gap is not None else (release.get("gap_days_reason") or "unavailable")
+
+    members = release["members"]
+    delivering = [m for m in members if m["delivery"]["delivering"]]
+    trailing = [
+        m for m in members
+        if not m["delivery"]["delivering"] and m["delivery"]["delivered_in"] is not None
+    ]
+    delivering_display = ", ".join(m["name"] for m in delivering) if delivering else "none"
+    trailing_display = ", ".join(m["name"] for m in trailing) if trailing else "none"
+
+    scope = release["delivered_scope"]
+    # review F1: `n`/`unreadable` were computed by `_delivered_scope` and
+    # then discarded here — a partially-unreadable scope rendered as a
+    # complete-looking number with no disclosure (AC-3.6). Now always
+    # visible, mirroring the band's own `scope_unreadable` note.
+    if scope["us"] is not None:
+        scope_display = f"{_scope_text(scope['us'], scope['acs'])} (n={scope['n']} of {len(delivering)} delivering)"
+    else:
+        scope_display = scope["reason"] or "unavailable"
+    if scope["unreadable"]:
+        scope_display += f"; unreadable: {', '.join(scope['unreadable'])}"
+
+    wt_display = _work_types_value(release)
+
+    rows = "".join(
+        f"<dt>{_esc(label)}</dt>\n<dd>{_esc(str(value))}</dd>\n"
+        for label, value in (
+            ("Date", date_display),
+            ("Gap to predecessor", gap_display),
+            ("Delivering", delivering_display),
+            ("Trailing", trailing_display),
+            ("Delivered scope", scope_display),
+            ("Commits", release["commit_count"]),
+            ("Unattributed commits", len(release["unattributed"])),
+            ("Work types", wt_display),
+        )
+    )
+    return f'<dl class="figures-band release-figures">\n{rows}</dl>\n'
+
+
 def _render_release_detail(
     release: dict, index: int, *,
     plan: dict | None = None, documents: dict | None = None, releases: list[dict] | None = None,
@@ -500,13 +673,22 @@ def _render_release_detail(
     label = _release_label(release)
     is_pseudo = release["tag"] is None
     pseudo_marker = '<span class="pseudo-marker">open window</span>' if is_pseudo else ""
-    stats_line = f'<p class="stats-line">{_pseudo_stats_line(release)}</p>\n' if is_pseudo else ""
+    if is_pseudo:
+        stats_line = f'<p class="stats-line">{_pseudo_stats_line(release)}</p>\n'
+        figures_header = ""
+        delivering_summary = ""
+    else:
+        stats_line = f'<p class="stats-line">{_real_stats_line(release)}</p>\n'
+        figures_header = _render_release_figures(release)  # US-4, AC-4.4: single call site
+        delivering_summary = _delivering_summary_line(release)
     return (
         f'<article class="release-card" id="{_esc(anchor)}">\n'
         f'<a class="back-link" href="#index">&larr; Back to index</a>\n'
         f"<h2>{_esc(label)}{pseudo_marker}</h2>\n"
         f"{stats_line}"
+        f"{figures_header}"
         "<h3>Members</h3>\n"
+        f"{delivering_summary}"
         f"{_render_members_section(release, original_index=index, plan=plan, documents=documents, releases=releases)}"
         "<h3>Unattributed commits</h3>\n"
         f"{_render_unattributed_section(release)}"
@@ -581,6 +763,136 @@ def _render_page_budget_notice(plan: dict | None) -> str:
     )
 
 
+def _render_figures_band(data: dict) -> str:
+    """US-3/AC-3.1: the global figures band, above the release index — one
+    formatting pass over `build_release_map()`'s own top-level `figures`
+    dict, nothing recomputed (ADR-0). AC-3.5: a zero-tag repo states its
+    reason and shows no figures. AC-3.4: one unreadable figure shows
+    `null`+reason while every other still renders. A `<dl>` — real
+    programmatic label/value pairing, reusing the shipped `.index-list`
+    auto-fit grid idiom for the 375px multi-row wrap (design finding 4)."""
+    figures = data.get("figures")
+    if figures is None:
+        return f'<p class="empty-notice">{_esc(data.get("reason") or "no releases found")}</p>\n'
+
+    def cell(label: str, value, reason: str | None = None) -> str:
+        display = value if value is not None else (reason or "unavailable")
+        return f"<dt>{_esc(label)}</dt>\n<dd>{_esc(str(display))}</dd>\n"
+
+    gap_range = (
+        f"{figures['gap_min']}–{figures['gap_max']} d"
+        if figures["gap_min"] is not None else None
+    )
+    # review F11: `_median` always returns `float` (so an even-`n` fractional
+    # median like `1.5` prints correctly) — but AC-3.1's own stated example
+    # is the bare integer `2`, not `2.0`. Display-only: drops a whole
+    # number's trailing `.0` without touching the JSON value or the
+    # underlying float itself.
+    gap_median = figures["gap_median"]
+    gap_median_text = None
+    if gap_median is not None:
+        gap_median_text = str(int(gap_median)) if gap_median == int(gap_median) else str(gap_median)
+    gap_median_display = f"{gap_median_text} d" if gap_median_text is not None else None
+    scope_display = (
+        _scope_text(figures['delivered_us'], figures['delivered_acs'])
+        if figures["delivered_us"] is not None else None
+    )
+    # review F1: the `n` beside the label — how many of `features_delivered`
+    # actually contributed to this total — so a partial count (some
+    # delivering members unreadable, but not ALL of any single release's
+    # own set) is visible next to the number, not only inferable from the
+    # `scope_unreadable` note below.
+    scope_label = f"Delivered scope (n={figures['delivered_scope_n']} of {figures['features_delivered']} delivering)"
+    rows = "".join([
+        cell("Tagged releases", figures["release_count"]),
+        cell("First release", figures["first_date"], "date unavailable"),
+        cell("Last release", figures["last_date"], "date unavailable"),
+        cell(f"Median gap (n={figures['gap_n']})", gap_median_display, "not enough measured gaps"),
+        cell("Gap range", gap_range, "not enough measured gaps"),
+        cell("Features delivered", figures["features_delivered"]),
+        cell(scope_label, scope_display, "scope unavailable"),
+        cell("Commits since last release", figures["open_window_commit_count"], "unavailable"),
+    ])
+    unreadable_note = ""
+    if figures["scope_unreadable"]:
+        names = ", ".join(_esc(n) for n in figures["scope_unreadable"])
+        unreadable_note = f'<p class="truncation-note">Scope unreadable for: {names}.</p>\n'
+    return f'<dl class="figures-band">\n{rows}</dl>\n{unreadable_note}'
+
+
+def _cadence_bar_width_pct(gap: int, gap_max: int) -> int:
+    if gap_max <= 0:
+        return 0
+    return max(0, min(100, round((gap / gap_max) * 100)))
+
+
+def _render_cadence_strip(releases: list[dict]) -> str:
+    """US-3/AC-3.2/AC-3.3/AC-3.4/AC-3.7: real releases oldest-first, one row
+    per gap SLOT — every real release except the earliest has one, whether
+    or not its own gap turned out measurable. Never the pseudo-release's
+    own age (A7). Exactly two states, never a third (AC-3.7): **present**
+    shows every slot — a plain number plus a uniform-hue bar for a
+    measured gap, or `null`+its own reason with no bar for an unmeasurable
+    one (AC-3.4; review F2 — an unmeasurable gap used to be silently
+    dropped from the table instead of shown as unmeasurable, which could
+    also mislabel the wrong row "longest") — or **absent** entirely, with
+    a reason naming `n` (AC-3.3, refuses itself below 2 gap slots — a
+    single slot cannot depict a shape). The "longest" mark (review F7 —
+    previously applied to every tied row, including an all-zero set) is
+    shown only when every slot in the set is measured, there is exactly
+    one maximum, and it is greater than zero — by rank/text weight only,
+    never by color; no connecting line, curve or averaged value is ever
+    drawn."""
+    real = [r for r in releases if r["tag"] is not None]
+    gap_slots = real[1:]  # the earliest real release has no predecessor gap
+    if len(gap_slots) < 2:
+        # Re-review F14: `n` here is the number of release-to-release gap
+        # SLOTS, which since F2's rewrite is no longer the same quantity as
+        # the number of *measured* gaps — with 2 tags and one unreadable tag
+        # date this said "not enough measured gaps (n=1)" while zero were
+        # actually measured, overstating measurement on the one surface
+        # AC-3.3 governs. Named for what it counts.
+        return (
+            '<p class="empty-notice">Not enough release-to-release gaps to show a cadence '
+            f"strip (n={len(gap_slots)}).</p>\n"
+        )
+    known_gaps = [r["gap_days"] for r in gap_slots if r["gap_days"] is not None]
+    gap_max = max(known_gaps) if known_gaps else None
+    all_known = len(known_gaps) == len(gap_slots)
+    show_longest = all_known and gap_max is not None and gap_max > 0 and known_gaps.count(gap_max) == 1
+
+    row_htmls = []
+    for r in gap_slots:
+        gap = r["gap_days"]
+        if gap is None:
+            gap_cell = _esc(r.get("gap_days_reason") or "unavailable")
+            bar_cell = ""
+        else:
+            is_longest = show_longest and gap == gap_max
+            gap_cell = f"<strong>{gap} d (longest)</strong>" if is_longest else f"{gap} d"
+            width_pct = _cadence_bar_width_pct(gap, gap_max)
+            bar_cell = f'<span class="cadence-bar" style="width:{width_pct}%"></span>'
+        row_htmls.append(
+            "<tr>"
+            f"<td>{_esc(r['previous_tag'])} &rarr; {_esc(r['tag'])}</td>"
+            f"<td>{gap_cell}</td>"
+            f"<td>{bar_cell}</td>"
+            "</tr>\n"
+        )
+    body = "".join(row_htmls)
+    caption = "Cadence between releases"
+    if not all_known:
+        caption += f" ({len(known_gaps)} of {len(gap_slots)} measured)"
+    return (
+        '<div class="table-wrap">\n<table>\n'
+        f"<caption>{_esc(caption)}</caption>\n"
+        '<thead><tr><th scope="col">From &rarr; To</th><th scope="col">Gap (days)</th>'
+        '<th scope="col">Relative</th></tr></thead>\n'
+        f"<tbody>\n{body}</tbody>\n"
+        "</table>\n</div>\n"
+    )
+
+
 def render_release_board_html(data: dict, documents: dict | None = None) -> str:
     """Pure — `build_release_map()` dict (and, optionally, an already-read
     `documents` dict from `artifactcontent.collect_release_documents`) in,
@@ -592,16 +904,24 @@ def render_release_board_html(data: dict, documents: dict | None = None) -> str:
     F14, corrected here): a plan IS computed, so every member still gets
     its 5-artifact `<details>` section, each honestly stating "no document
     collected for this render" (`_render_document_details`'s own
-    placeholder) rather than the capability silently vanishing."""
+    placeholder) rather than the capability silently vanishing.
+
+    Review F10: `data`'s accepted shape narrowed at `0.11.0` — every real
+    release now requires its own `figures`/`date`/`commit_count`/
+    `delivered_scope`, and every member its own `delivery`/`scope`
+    (`build_release_map()`'s own current output; see `releasemap.py`'s
+    module docstring). A `0.10.0`-shaped dict missing these keys raises
+    `KeyError`/`AttributeError` here — this function is pure and does not
+    itself catch that; callers wanting a named error instead of a raw
+    exception should go through `run_release_board_report`, which wraps
+    exactly those classes into `ReleaseMapUnreadableError`."""
     releases = data["releases"]
-    reason = data.get("reason")
 
     if not releases:
-        # AC-3.1: zero tags — the reason in words, an empty index, never a
-        # traceback, a blank page, or a placeholder row.
-        body = (
-            f'<p class="empty-notice">{_esc(reason or "no releases found")}</p>\n'
-        )
+        # AC-3.1/AC-3.5: zero tags — the band states the reason in words,
+        # an empty index, never a traceback, a blank page, or a
+        # placeholder row.
+        body = _render_figures_band(data)
     else:
         order = _display_order(releases)
         plan = _document_plan(order, documents, _PAGE_DOCUMENT_BUDGET_BYTES) if documents is not None else None
@@ -612,6 +932,10 @@ def render_release_board_html(data: dict, documents: dict | None = None) -> str:
         )
         count_word = "release" if len(releases) == 1 else "releases"
         body = (
+            "<h2>Overview</h2>\n"
+            f"{_render_figures_band(data)}"
+            "<h2>Cadence</h2>\n"
+            f"{_render_cadence_strip(releases)}"
             f'<p class="lead">{len(releases)} {count_word}, newest first.</p>\n'
             f'<ul class="index-list" id="index">\n{index_rows}</ul>\n'
             f"{_render_page_budget_notice(plan)}"

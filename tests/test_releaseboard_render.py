@@ -9,6 +9,7 @@ import re
 import pytest
 
 from aspark_insights.errors import ReleaseMapUnreadableError, ReportUnwritableError
+from aspark_insights.gitboard.releasemap import _build_figures
 from aspark_insights.gitboard.releaseboard_logo import LOGO_PNG_BASE64
 from aspark_insights.gitboard.releaseboard_report import (
     _ARTIFACT_HUES,
@@ -41,19 +42,45 @@ def _artifact_status(status="approved", date="2026-08-01", reason=None) -> dict:
     return {"status": status, "date": date, "reason": reason}
 
 
-def _member(name: str, **status_overrides) -> dict:
+def _delivery(delivering=True, delivered_in=None, reason=None) -> dict:
+    return {"delivering": delivering, "delivered_in": delivered_in, "reason": reason}
+
+
+def _scope(us=1, acs=1, reason=None) -> dict:
+    return {"us": us, "acs": acs, "reason": reason}
+
+
+def _member(name: str, *, delivery=None, scope=None, **status_overrides) -> dict:
     status = {a: _artifact_status() for a in ("spec", "plan", "review", "qa", "release")}
     status.update(status_overrides)
-    return {"name": name, "status": status}
+    return {
+        "name": name, "status": status,
+        "delivery": delivery if delivery is not None else _delivery(),
+        "scope": scope if scope is not None else _scope(),
+    }
 
 
-def _release(tag: str, previous_tag=None, next_tag=None, members=None, unattributed=None) -> dict:
+def _delivered_scope(us=1, acs=1, n=1, unreadable=None, reason=None) -> dict:
+    return {"us": us, "acs": acs, "n": n, "unreadable": unreadable if unreadable is not None else [], "reason": reason}
+
+
+def _release(
+    tag: str, previous_tag=None, next_tag=None, members=None, unattributed=None,
+    date="2026-08-01", date_reason=None, commit_count=1, delivered_scope=None,
+    gap_days=None, gap_days_reason=None,
+) -> dict:
     return {
         "tag": tag,
         "previous_tag": previous_tag,
         "next_tag": next_tag,
         "members": members if members is not None else [_member(f"{tag}-feature")],
         "unattributed": unattributed if unattributed is not None else [],
+        "date": date,
+        "date_reason": date_reason,
+        "commit_count": commit_count,
+        "delivered_scope": delivered_scope if delivered_scope is not None else _delivered_scope(),
+        "gap_days": gap_days,
+        "gap_days_reason": gap_days_reason,
     }
 
 
@@ -71,12 +98,14 @@ def _pseudo(previous_tag="v1.0.0", commits_value=2, days=1, branches=None, membe
 
 
 def _data(releases=None, reason=None) -> dict:
+    releases = releases if releases is not None else []
     return {
         "provenance": {
             "as_of": "2026-08-20", "insights_version": "0.9.0", "source": "git-interim",
             "git_available": True,
         },
-        "releases": releases if releases is not None else [],
+        "figures": _build_figures(releases) if releases else None,
+        "releases": releases,
         "reason": reason,
     }
 
@@ -484,5 +513,5 @@ def test_pseudo_release_work_types_absent_renders_no_clause():
     pseudo = _pseudo(previous_tag="v1.0.0", commits_value=4)
     assert "work_types" not in pseudo
     text = render_release_board_html(_data([_release("v1.0.0"), pseudo]))
-    detail = text.split('id="rel-1"')[1]
+    detail = text.split('id="rel-1"')[1].split("</article>")[0]
     assert "Work types" not in detail
