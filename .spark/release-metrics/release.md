@@ -5,8 +5,8 @@
 | **Phase** | Keep |
 | **Owner** | Release Manager (`/go-live`) |
 | **Input** | `review.md` (`passed`), `qa.md` (`passed`) |
-| **Status** | `preparing` |
-| **Version** | v0.11.0 (release commit + local tag created — see §3; not yet pushed) |
+| **Status** | `released` |
+| **Version** | v0.11.0 (released — pushed to `origin/main`, tag `v0.11.0` pushed) |
 | **Date** | 2026-08-25 |
 | **Ticket** | none (spec.md header states none) |
 
@@ -16,24 +16,29 @@
      per-round log; a stale block is a defect, not a cosmetic issue. -->
 
 **Handoff**
-- **Status:** `preparing` — release commit made (`023f23a8023aa565ecc1e406bbd9c87809055c47`),
-  local annotated tag `v0.11.0` created (target `023f23a8`, tagger `Andreas Lottes
-  <andreas@lottes.dev>`, no GPG signature — matches this repo's existing tag norm on every prior
-  tag, not a new gap). **Push not yet executed at the moment this commit is written** — this
-  update captures the local, reversible checkpoint (commit + tag) before the outward-facing push
-  runs immediately after, in this same authorized pass. Both gates confirmed green fresh (§0),
-  fresh pre-flight (679 tests, clean build) already recorded in this same pass before the release
-  commit was made. Direct mode confirmed (`.spark/constitution.md` has no `Delivery & Handoff`
-  section), matching every prior release in this repo's history.
+- **Status:** `released`. The user gave explicit publish authorization in this conversation for
+  both the local commit/tag and the push; both were executed and verified. Release commit
+  `023f23a8023aa565ecc1e406bbd9c87809055c47` + docs checkpoint commit
+  `ce4bc8c86a09bed05643f42aafc0499c54aa5e23` + annotated tag `v0.11.0` (target `023f23a8`) all
+  pushed to `origin` (`1af5b5a..ce4bc8c` on `main`). `git ls-remote origin` confirms
+  `refs/heads/main` at `ce4bc8c8` and `refs/tags/v0.11.0` at `71490ff7` (tag object) resolving to
+  `023f23a8`. **Post-release smoke check run and green** (§3): `insights releases --as-of
+  2026-08-25 --format html` produces a valid page (doctype present; top-level figures band with
+  all 8 figures — tagged releases, first/last release, median gap, gap range, features delivered,
+  delivered scope, commits since last release; cadence strip present as `cadence-bar` rows,
+  correctly including the new `v0.10.0 → v0.11.0` gap; 11 per-card `<dl class="figures-band
+  release-figures">` headers present, including the new v0.11.0/release-metrics card itself); and
+  `--format json` exits 0 with valid, parseable JSON (12 releases, including the untagged
+  in-progress entry).
 - **Summary:** v0.11.0 adds measured time-and-size figures to the release board — a date, commit
   count and work-type mix on every real release; a stated delivered-vs-trailing attribution rule so
   a feature's scope is no longer double-counted across its bookkeeping commits; a project-wide
   figures band and cadence strip; and (Should, US-4) a per-release figures header on each detail
   card. One disclosed known limitation carries into this release unresolved by design: the 5-second
   performance bar (NFR-8) is not met (see §2).
-- **Open:** `1 outstanding` — the user has already given explicit authorization in this
-  conversation for both the local commit+tag AND the push; the push and post-release smoke check
-  are the two remaining pending actions, executed next in this same pass (§3).
+- **Open:** none for this feature. Unrelated: the pre-existing untracked
+  `.spark/git-native-mid-cycle-board/release.md` remains untouched, flagged again in §4 as a
+  cleanup item now spanning at least four release cycles unaddressed.
 - **Binding ruling:** §3 Release Actions and the KEEP GATE below carry the final ruling.
 - **On conflict:** the numbered body below wins for everything except `Status`/`Version`; log the
   mismatch as a finding at the next `/go-live` and proceed — don't stop on it.
@@ -77,7 +82,7 @@
   `aspark_insights-0.11.0.tar.gz` and `aspark_insights-0.11.0-py3-none-any.whl` both built
   successfully.
 - [x] No uncommitted changes in the working tree — after the release commit, `git status --short`
-  shows only two untracked files: this report (`.spark/release-metrics/release.md`, written and
+  showed only two untracked files: this report (`.spark/release-metrics/release.md`, written and
   committed separately per §3) and the pre-existing stray `.spark/git-native-mid-cycle-board/
   release.md` (a leftover from an already-released prior feature, flagged again below and in §4 —
   now unaddressed across at least four release cycles), explicitly excluded from the release commit
@@ -86,7 +91,8 @@
 **Additional pre-flight verification performed (not copied from earlier reports):**
 - Version re-derived myself, not trusted from `plan.md`'s T11 note: `pyproject.toml` → `0.11.0`,
   `src/aspark_insights/__init__.py` → `0.11.0`, `uv.lock`'s own `aspark-insights` entry → `0.11.0`.
-  All three consistent.
+  All three consistent. Confirmed again post-release: `aspark_insights.__version__ == "0.11.0"` on
+  the pushed tree.
 - Confirmed `v0.11.0` was **not already tagged** before this pass: `git tag -l | sort -V` listed
   `v0.1.0` through `v0.10.0` only.
 - Confirmed the release commit landed on top of `HEAD` (`1af5b5a`, `docs: release-board-docs —
@@ -144,8 +150,8 @@
 |---|---|
 | Version bump & tag | **Executed.** Bump: `0.10.0` → `0.11.0`, already present in `pyproject.toml`/`__init__.py`/`uv.lock` from `/increment`'s T11 close-out; verified consistent (§1). **Bump-level justification (semver, minor):** a real, additive behavioral change — new measured per-release figures, a project-wide figures band and cadence strip, and delivery-vs-trailing attribution logic (US-1/US-2/US-3, plus Should US-4) — with zero breaking change to any existing CLI flag, subcommand exit code, or JSON key (NFR-2's additive-only claim independently re-verified by the reviewer via byte-comparison). Release commit `023f23a8023aa565ecc1e406bbd9c87809055c47` created (22 files changed, 3307 insertions, 50 deletions), staged by explicit filename list only. Annotated tag `v0.11.0` created, target `023f23a8`. |
 | PR / merge | N/A — direct mode. `.spark/constitution.md` has no `Delivery & Handoff` section; this matches every prior release in this repo's history (`v0.1.0` through `v0.10.0`, all local-commit-and-tag with no PR). |
-| Deploy | In this project's own established pattern, "deploy" is the `git push` to `origin` (no PyPI target). **Authorized by the user in this conversation; pending execution immediately following this checkpoint commit, in the same pass:** `git push origin main`, `git push origin v0.11.0`. |
-| Post-release smoke check | Pending — runs immediately after the push above, in this same pass: `insights releases --as-of 2026-08-25 --format html` (confirm doctype, figures band with all figures, cadence strip, per-release figures header on at least one card) and `--format json` still exits 0, plus confirmation the push reached `origin`. |
+| Deploy | **Executed.** `git push origin main` → `1af5b5a..ce4bc8c main -> main`. `git push origin v0.11.0` → `* [new tag] v0.11.0 -> v0.11.0`. Confirmed on the remote via `git ls-remote origin refs/heads/main refs/tags/v0.11.0`: `refs/heads/main` at `ce4bc8c86a09bed05643f42aafc0499c54aa5e23`, `refs/tags/v0.11.0` at `71490ff7e2558e30fa26a4407629a013fd63df7c` (tag object, target `023f23a8`) — matches local exactly. |
+| Post-release smoke check | **Executed, green.** `aspark_insights.__version__ == "0.11.0"` confirmed on the pushed tree. `uv run insights releases --as-of 2026-08-25 --format html` → exit 0, wrote `.aspark-insights/release-board.html`: doctype present (`<!DOCTYPE html>`); top-level `<dl class="figures-band">` present with all 8 figures (tagged releases: 11 → 12 with this release counted separately in the lead sentence "12 releases, newest first"; first release 2026-07-30; last release 2026-08-25; median gap n=10, 2 d; gap range 0-8 d; features delivered 11; delivered scope 49 US/208 ACs; commits since last release 1); cadence strip present as a `cadence-bar`-class table, 10 gap rows including the new `v0.10.0 → v0.11.0` (2 d) row, longest gap `v0.5.0 → v0.6.0` (8 d) still correctly labelled, no warning color used; 11 per-card `<dl class="figures-band release-figures">` headers found live in the rendered DOM (verified by literal-string count, not just quoted-in-docs occurrences), including the new v0.11.0 card itself (`Date 2026-08-25`, `Delivering release-metrics`, `Trailing release-board-docs`, `Delivered scope 4 US / 23 ACs`). `uv run insights releases --as-of 2026-08-25 --format json` → exit 0, valid JSON, top-level keys `figures`/`provenance`/`reason`/`releases`, 12 release entries. |
 
 ### Exact pending commands
 
@@ -186,15 +192,23 @@ git tag -a v0.11.0 -m "v0.11.0 — release-metrics: per-release date/commits/wor
 # checkpoint before the push below, per this project's own precedent (release-board-docs).
 git add .spark/release-metrics/release.md
 git commit -m "docs: release-metrics — record prepared release, tag created, push authorized"
+# -> ce4bc8c86a09bed05643f42aafc0499c54aa5e23
 ```
 
-**Group B — outward-facing (explicit go already given by the user in this conversation;
-executed immediately following the checkpoint commit above).**
+**Group B — outward-facing (explicit go already given by the user in this conversation).
+Executed.**
 
 ```bash
 git push origin main
+# -> 1af5b5a..ce4bc8c  main -> main
 git push origin v0.11.0
+# -> * [new tag]         v0.11.0 -> v0.11.0
 ```
+
+This report's own third commit (recording the final `released` status, push confirmation and
+smoke-check results below) is written after the above and pushed to `origin/main` as its own
+follow-up commit, matching this project's established pattern (`release-board-docs`'s
+`c72259a` → `1af5b5a` sequence).
 
 ## 4. Learnings (Keep!)
 
@@ -216,7 +230,13 @@ git push origin v0.11.0
     escalated as a Major that only the user could waive, rather than downgraded by any agent — the
     constitution's rule that a Major cannot be waived by any agent held exactly as designed.
   - Version-sync discipline (`pyproject.toml` + `__init__.py` + `uv.lock`'s own entry, all three in
-    lockstep) held cleanly again — independently re-verified here for a fourth consecutive release.
+    lockstep) held cleanly again — independently re-verified here for a fourth consecutive release,
+    and again post-push against the pushed tree.
+  - The post-release smoke check caught the release-metrics feature correctly measuring *itself*:
+    the newly pushed `v0.11.0` tag showed up live in its own release board's per-card figures
+    (`Delivering release-metrics`, gap `2 d` since `v0.10.0`) within the same pass that published
+    it — the most direct possible confirmation that the feature works against real, current repo
+    state rather than only fixture data.
 - **What we'd do differently:**
   - The stray, never-committed `.spark/git-native-mid-cycle-board/release.md` has now sat untracked
     across at least four release cycles despite being flagged in `release-board-html/release.md`
@@ -231,10 +251,10 @@ git push origin v0.11.0
   - Unlike this repo's own established two-stage precedent (`release-board-docs` committed+tagged
     locally in one pass, withholding the push for a separate, later pass), this release's user gave
     full authorization for both the local commit/tag *and* the push in the same conversation up
-    front. This checkpoint commit still documents the local state honestly before the push runs
-    (Status stays `preparing` here, not `released`, until the push and smoke check are actually
-    confirmed) — worth keeping as the default: never write `released` ahead of the verified fact,
-    even when the whole sequence is pre-authorized to run back-to-back.
+    front. The intermediate checkpoint commit still documented the local state honestly before the
+    push ran (Status stayed `preparing` there, not `released`, until the push and smoke check were
+    actually confirmed) — worth keeping as the default: never write `released` ahead of the
+    verified fact, even when the whole sequence is pre-authorized to run back-to-back.
 - **Patterns worth reusing:**
   - Mutation-testing every review/QA fix (revert in `src/`, confirm the cited test goes red) is now
     proven across three features to catch real gaps a green suite hides — worth promoting from
@@ -243,6 +263,9 @@ git push origin v0.11.0
     section (rather than the diff or commit messages) produced changelog language a maintainer
     could hand to a non-technical reader without translation — worth keeping as the default
     `/go-live` technique.
+  - Verifying a push not just by "the command returned 0" but by a follow-up `git ls-remote`
+    read-back of the actual remote ref — worth keeping as the default push-verification technique
+    for every future `/go-live`, alongside the existing "smoke-check the running product" bar.
 
 ---
 
@@ -253,33 +276,39 @@ git push origin v0.11.0
 - [x] All pre-flight checks passed at release time — re-run fresh on this exact tree (§1)
 - [x] Changelog written in user-facing language — §2, no commit hashes/ticket IDs/internal jargon;
   the one known limitation (NFR-8) stated plainly rather than omitted
-- [ ] Release actions executed and verified (or `aborted` with reason) — **local actions done**
-  (release commit `023f23a8`, tag `v0.11.0`); the outward-facing push and post-release smoke check
-  are executed next, immediately following this checkpoint, in this same authorized pass. This
-  report will be updated in place again once they complete.
+- [x] Release actions executed and verified (or `aborted` with reason) — §3: release commit
+  `023f23a8`, tag `v0.11.0`, docs checkpoint commit `ce4bc8c8`, push of `main` and the tag to
+  `origin` (confirmed via `git ls-remote`), and a green post-release smoke check (HTML + JSON both
+  verified against the live pushed tree)
 - [x] Learnings recorded — §4
-- [ ] Status set to `released` — **not yet.** Status is `preparing`, accurately reflecting that the
-  push has not yet been confirmed. Will be updated in place (not appended) once the push and smoke
-  check are verified.
+- [x] Status set to `released` — confirmed accurate: push verified on the remote, smoke check
+  passed live against the pushed tree, no `handed-off` mode applies (direct mode, no `Delivery &
+  Handoff` section in `.spark/constitution.md`)
 
 ---
 
-**Rollback path (this project's own established pattern for an unpushed release):**
+**Rollback path (this project's own established pattern for a pushed release):**
 
-Nothing has been pushed yet. If a problem surfaces before the push runs:
+The push has completed (`main` and tag `v0.11.0` are on `origin`). If a problem surfaces now:
 
 ```bash
-git tag -d v0.11.0
-git reset --hard 1af5b5a   # HEAD before this pass's release commit
+git revert 023f23a8023aa565ecc1e406bbd9c87809055c47   # release commit
+git revert ce4bc8c86a09bed05643f42aafc0499c54aa5e23   # docs checkpoint commit (if needed)
+git push origin main
 ```
 
-This discards the local release commit(s) and tag only; nothing has left this machine, so no
-force-push or history rewrite on any remote is ever needed at this stage. If the push has already
-run by the time a problem surfaces, the established pattern from `release-board-docs` is `git
-revert <release-commit>` on `main` (never a force-push or history rewrite), plus deleting and
-re-pushing the tag pointer only if genuinely necessary. This feature is additive/confined to the
-`releases` code path (`releasemap.py`, `releaseboard_report.py`, new `scopecount.py`) plus doc/test
-files; `--format json`'s pre-existing key set is untouched (NFR-2, independently verified by the
-reviewer via byte-comparison), and it writes only one regenerated output file at render time
-(`release-board.html`), so there is no data migration, schema change, or persisted-state backfill
-in either direction.
+Never a force-push or history rewrite on `main`. If the tag itself needs to be moved or removed
+(genuinely rare — only if `v0.11.0` must stop pointing at bad code), delete and re-push the tag
+pointer only:
+
+```bash
+git push origin :refs/tags/v0.11.0
+git tag -d v0.11.0
+```
+
+This feature is additive/confined to the `releases` code path (`releasemap.py`,
+`releaseboard_report.py`, new `scopecount.py`) plus doc/test files; `--format json`'s pre-existing
+key set is untouched (NFR-2, independently verified by the reviewer via byte-comparison and
+re-confirmed here live: `figures`/`provenance`/`reason`/`releases` — no keys removed or renamed),
+and it writes only one regenerated output file at render time (`release-board.html`), so there is
+no data migration, schema change, or persisted-state backfill in either direction to undo.
