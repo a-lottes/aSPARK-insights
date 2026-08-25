@@ -9,10 +9,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 + fetch-tags: true: actions/checkout@v4's default
+      # (depth-1, no tags) left this repo's own git tags and history
+      # invisible to CI — every test that verifies against this repo's own
+      # real tag history (a load-bearing pattern here, e.g.
+      # tests/test_releasemap_integration.py, tests/test_releasemap_figures.py)
+      # failed in CI, unnoticed, for six releases (release-board 2026-08-19
+      # through release-metrics 2026-08-25) because no ceremony had checked
+      # the Actions run status until now.
       - name: Checkout aspark-insights
         uses: actions/checkout@v4
         with:
           path: aSPARK-insights
+          fetch-depth: 0
+          fetch-tags: true
 
       # aspark-graph is a uv path dependency (pyproject.toml [tool.uv.sources]),
       # checked out as a sibling directory so the interim library adapter has a

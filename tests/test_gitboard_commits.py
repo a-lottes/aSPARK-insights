@@ -29,8 +29,13 @@ def _corrupt_committer_timestamp(repo: Path, branch: str) -> None:
         r"committer \1 <\2> NOTATIMESTAMP +0000",
         raw, flags=re.MULTILINE,
     )
+    # CI fix: newer git (2.55, CI's runner) rejects writing an object this
+    # malformed via a bare `hash-object -w` (older git, e.g. 2.39 locally,
+    # was more permissive); `--literally` is git's own documented escape
+    # hatch for "hash any garbage into a loose object ... for reproducing
+    # characteristics of corrupted objects" — exactly this use case.
     new_hash = subprocess.run(
-        ["git", "hash-object", "-w", "-t", "commit", "--stdin"],
+        ["git", "hash-object", "-w", "--literally", "-t", "commit", "--stdin"],
         cwd=repo, input=bad, capture_output=True, text=True, check=True,
     ).stdout.strip()
     _git(repo, "update-ref", f"refs/heads/{branch}", new_hash)

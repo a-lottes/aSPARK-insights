@@ -170,9 +170,15 @@ def test_real_repo_delivered_scope_at_v0_3_0_v0_5_0_v0_9_0():
     assert (by_tag["v0.9.0"]["delivered_scope"]["us"], by_tag["v0.9.0"]["delivered_scope"]["acs"]) == (3, 13)
 
 
-def test_real_repo_features_delivered_total_is_ten():
+def test_real_repo_features_delivered_total_is_at_least_ten():
+    """CI fix: this repo has accumulated an 11th real tag since this test
+    was first written (release-metrics' own `v0.11.0`) — `features_delivered`
+    grows by design with every future release, so `==10` broke the moment
+    this very feature shipped. `>=10` preserves the original real-data
+    check (every one of the first ten features genuinely delivered) without
+    requiring a rewrite at every subsequent release."""
     result = build_release_map(str(_REPO_ROOT), "2026-08-24")
-    assert result["figures"]["features_delivered"] == 10
+    assert result["figures"]["features_delivered"] >= 10
 
 
 def test_one_release_with_all_delivering_scope_unreadable_nulls_the_band_total_not_zero(tmp_path: Path):

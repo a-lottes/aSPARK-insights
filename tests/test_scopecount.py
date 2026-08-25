@@ -7,6 +7,13 @@ from pathlib import Path
 
 from aspark_insights.gitboard.scopecount import read_scope_counts
 
+# CI B1: these three tests below were hardcoded to a local machine's absolute
+# path and failed everywhere else (CI included) with a spurious "spec.md
+# missing" — every other real-repo test in this project derives its root
+# from `__file__` (see `tests/test_releasemap_figures.py`'s own `_REPO_ROOT`);
+# this file simply forgot to.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
 
 def test_missing_spec_is_null_with_reason(tmp_path: Path):
     result = read_scope_counts(tmp_path / "no-such-spec.md")
@@ -73,18 +80,18 @@ def test_never_raises_on_a_directory_path(tmp_path: Path):
 
 
 def test_real_spec_release_board_html():
-    result = read_scope_counts(Path("/Users/andreaslottes/aSPARK-insights/.spark/release-board-html/spec.md"))
+    result = read_scope_counts(_REPO_ROOT / ".spark/release-board-html/spec.md")
     assert result == {"us": 3, "acs": 13, "reason": None}
 
 
 def test_real_spec_combined_v0_3_0_features():
-    mcp = read_scope_counts(Path("/Users/andreaslottes/aSPARK-insights/.spark/mcp-server/spec.md"))
-    polish = read_scope_counts(Path("/Users/andreaslottes/aSPARK-insights/.spark/public-repo-polish/spec.md"))
+    mcp = read_scope_counts(_REPO_ROOT / ".spark/mcp-server/spec.md")
+    polish = read_scope_counts(_REPO_ROOT / ".spark/public-repo-polish/spec.md")
     assert (mcp["us"] + polish["us"], mcp["acs"] + polish["acs"]) == (7, 24)
 
 
 def test_real_spec_measurement_honesty():
-    result = read_scope_counts(Path("/Users/andreaslottes/aSPARK-insights/.spark/measurement-honesty/spec.md"))
+    result = read_scope_counts(_REPO_ROOT / ".spark/measurement-honesty/spec.md")
     assert result == {"us": 6, "acs": 33, "reason": None}
 
 
