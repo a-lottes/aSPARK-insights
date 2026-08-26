@@ -30,8 +30,16 @@
   separately in `9b98393` (independent of this release). The local release commit and annotated tag
   were then created exactly as prepared in §3; the outward-facing push (`origin main` + `origin
   v0.12.0`) followed once this file's local update was itself committed, per this project's
-  established pattern of committing the release report as its own step. See §3 for full results and
-  the post-release smoke check outcome.
+  established pattern of committing the release report as its own step. The outward-facing push
+  then succeeded: `git push origin main` moved `origin/main` from `cb8b664` to `08522a6` (confirmed
+  via `git ls-remote`), and `git push origin v0.12.0` created the remote tag, confirmed dereferencing
+  to `4eb87f1cabb5bb7c44926c64cd9310f06860bbff` (`git ls-remote origin refs/tags/v0.12.0^{}`). The
+  post-release smoke check then ran clean: `insights features --as-of 2026-08-26 --format html`
+  rendered a real doctype'd page with a 9-column `lens-table` covering all 12 real
+  `.spark/<feature>/` directories (including `feature-lens` itself, now correctly shown as
+  `release: released`), a pipeline section with the `Released` bucket populated and `Spec`/
+  `Increment`/`Review`/`QA` each showing their honest empty-notice; `--format json` exited 0 with
+  the expected `features`/`provenance`/`reason` shape. See §3 for the full record.
 - **Summary:** `insights features` — a new subcommand adding a feature-centric view of the same data
   the release board already computes: one row per `.spark/<feature>/` directory (its own spec date,
   5-artifact status, and the single release it actually delivered in), a derived honest current-gate
@@ -160,11 +168,33 @@ an unrelated commit, `9b98393`, before this release began) and this release repo
 known — per this project's established pattern.
 
 **Push confirmation:**
-- `git push origin main` — PENDING-FILL (see result below, recorded once executed).
-- `git push origin v0.12.0` — PENDING-FILL (see result below, recorded once executed).
+- `git push origin main` — succeeded: `cb8b664..08522a6 main -> main`. Confirmed independently via
+  `git ls-remote origin refs/heads/main` → `08522a6eca665eee9c9471c1d91b310714e37929`, matching local
+  `HEAD`.
+- `git push origin v0.12.0` — succeeded: `* [new tag] v0.12.0 -> v0.12.0`. Confirmed independently
+  via `git ls-remote origin refs/tags/v0.12.0` (tag object `734b76d9...`) and
+  `refs/tags/v0.12.0^{}` (dereferenced commit `4eb87f1cabb5bb7c44926c64cd9310f06860bbff`), matching
+  the release commit exactly.
 
-**Smoke check:**
-- PENDING-FILL — recorded once run, after the push above.
+**Smoke check (run fresh, after the push above, against the pushed/tagged tree):**
+- `insights features --as-of 2026-08-26 --format html --output <scratch>` → exit 0. Rendered page
+  confirmed: `<!DOCTYPE html>` present; one `<table class="lens-table">` with 9 columns (`Feature`,
+  spec date, `Spec`, `Plan`, `Review`, `QA`, `Release`, `Gate`, `Delivered In`); all 12 real
+  `.spark/<feature>/` directories present as rows (`feature-lens`, `release-metrics`,
+  `release-board-docs`, `release-board`, `release-board-html`, `git-native-mid-cycle-board`,
+  `measurement-honesty`, `snapshot-report`, `mcp-server`, `public-repo-polish`,
+  `traceability-metrics`, `foundation` — 12, not 11, because `feature-lens` now counts as one of its
+  own subjects, correctly); `feature-lens`'s own row now reads `release: released`,
+  `Gate: Released`, `Delivered In: v0.12.0`. Pipeline section: `Released` bucket populated with all
+  12 features (including `feature-lens`); `Spec`, `Increment`, `Review`, `QA` buckets each show the
+  honest `"no feature is currently at this stage."` empty-notice, with the same markup weight as the
+  populated bucket — no blank space, no broken-looking gap.
+- `insights features --as-of 2026-08-26 --format json --output <scratch>` → exit 0. Top-level shape
+  `{"features": [...], "provenance": {...}, "reason": null}`; each feature object carries `name`,
+  `spec_date`, `spec_date_reason`, `status` (per-artifact date/status/reason), `gate`,
+  `gate_artifact`, `gate_evidence`, `delivered_in`, `delivered_in_reason` — matching `spec.md`'s
+  AC-1.1 field shape. 12 feature objects returned, consistent with the HTML count above.
+- Logs quiet: no warnings, tracebacks, or stderr output on either invocation.
 
 ## 4. Rollback Path
 
@@ -260,11 +290,11 @@ is the exact pre-release commit confirmed as `HEAD` in §1 above — the base to
   clean working tree
 - [x] Changelog written in user-facing language — §2, sourced from `spec.md`'s stories and the
   README's own "Feature lens" section, no commit hashes or ticket IDs
-- [ ] Release actions executed and verified (or `aborted` with reason) — local commit and tag done
-  (`4eb87f1cabb5bb7c44926c64cd9310f06860bbff` / `v0.12.0`); push and smoke check pending execution
-  in the remaining steps of this same pass (this box closes on the next edit to this file, once
-  those results are in)
+- [x] Release actions executed and verified (or `aborted` with reason) — release commit
+  `4eb87f1cabb5bb7c44926c64cd9310f06860bbff`, annotated tag `v0.12.0`, `git push origin main`
+  (`cb8b664..08522a6`), and `git push origin v0.12.0` (new tag) all executed and independently
+  confirmed against the remote via `git ls-remote`; post-release smoke check run and passed (§3)
 - [x] Learnings recorded — §5
-- [ ] Status set to `released`, or `handed-off` in declared `pr` mode — header/Handoff already read
-  `released` per explicit authorization for the full sequence including the push; this box stays
-  open pending the push + smoke-check confirmation recorded in the next edit to this file
+- [x] Status set to `released`, or `handed-off` in declared `pr` mode — direct mode (no `Delivery &
+  Handoff` section declared in `.spark/constitution.md`), terminal status `released`, confirmed live
+  on `origin/main` and `origin/v0.12.0` and verified working by the smoke check above
