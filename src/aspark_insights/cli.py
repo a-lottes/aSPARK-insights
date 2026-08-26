@@ -130,6 +130,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_releases.add_argument("--format", choices=("json", "html"), default="json", help="Output format (default: json).")
 
+    p_features = sub.add_parser(
+        "features",
+        help="A feature-centric regrouping of the release board: one row per "
+             ".spark/<feature>/ directory (spec date, 5-artifact status, "
+             "delivered-in tag, current gate), plus a pipeline view grouped "
+             "by gate. Never reads the graph (source: git-interim, ADR-2).",
+    )
+    p_features.add_argument("--as-of", required=True, help="Date this view represents, YYYY-MM-DD (an input, never the wall clock).")
+    p_features.add_argument("--repo", default=".", help="Git repo root to read (default: .). Reads local git plumbing, .spark/ directory names, and each feature's own spec/plan/review/qa/release header tables — never document bodies, never the graph. A feature directory with no commit under it is not listed (membership is a git-range fact, same as `insights releases`).")
+    p_features.add_argument(
+        "--output", default=None,
+        help="Where to write feature-lens.html for --format html (default: --repo). "
+             "Ignored for --format json, which writes nothing.",
+    )
+    p_features.add_argument("--format", choices=("json", "html"), default="json", help="Output format (default: json).")
+
     return parser
 
 
@@ -154,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_board(args)
         if args.command == "releases":
             return _cmd_releases(args)
+        if args.command == "features":
+            return _cmd_features(args)
         parser.error(f"command {args.command!r} not wired up yet")
         return 2  # pragma: no cover - argparse.error() exits before this
     except InsightsError as exc:
@@ -273,6 +291,24 @@ def _cmd_releases(args: argparse.Namespace) -> int:
 
     documents = collect_release_documents(args.repo, release_map)
     path = run_release_board_report(release_map, args.output or args.repo, documents)
+    print(canonical_json({"report": str(path)}), end="")
+    return 0
+
+
+def _cmd_features(args: argparse.Namespace) -> int:
+    from aspark_insights.gitboard.featurelens import build_feature_lens
+
+    release_map = build_release_map(args.repo, args.as_of)
+    feature_lens = build_feature_lens(release_map)
+    if args.format == "json":
+        print(canonical_json(feature_lens), end="")
+        return 0
+    # --format html: render the self-contained feature-lens.html and report
+    # its path as JSON on stdout — mirrors _cmd_releases'/_cmd_board's own
+    # html branch exactly.
+    from aspark_insights.gitboard.featurelens_report import run_feature_lens_report
+
+    path = run_feature_lens_report(feature_lens, args.output or args.repo)
     print(canonical_json({"report": str(path)}), end="")
     return 0
 

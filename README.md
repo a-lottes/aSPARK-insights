@@ -259,6 +259,47 @@ recomputed a second way.
   the file is parsed, so a status that can't be confidently read says so
   honestly instead of pattern-matching around it.
 
+### Feature lens
+
+`insights features` is a feature-centric regrouping of the same data the
+release board already computes — one row per `.spark/<feature>/` directory
+instead of one card per git tag:
+
+```bash
+# JSON: one row per feature — spec date, 5-artifact status, delivered-in tag,
+# and a derived current-gate position
+uv run insights features --as-of 2026-08-25 --repo /path/to/any/git/repo
+
+# HTML: the same rows as a table, plus a pipeline section grouping features
+# by their current gate — one self-contained offline page, zero JavaScript
+uv run insights features --as-of 2026-08-25 --repo /path/to/any/git/repo \
+                          --format html --output /tmp/features-scratch
+# writes /tmp/features-scratch/.aspark-insights/feature-lens.html
+```
+
+- **A feature appears exactly once, even when it spans releases.** The
+  release board is release-centric, so tracing one feature end to end means
+  reconciling multiple cards — this view collapses every occurrence into one
+  row, reusing (never re-deriving) the release board's own oldest-occurrence
+  delivery rule and newest-occurrence document rule. `release-board-docs`
+  shows one row reading `delivered_in: v0.10.0`, even though it also appears
+  as a trailing member of `v0.11.0`'s card.
+- **A current-gate label, never a health verdict.** Each feature's position —
+  `Spec`/`Increment`/`Review`/`QA`/`Released`/`Unknown` — is derived from its
+  own 5-artifact status and always shown paired with the literal status it
+  came from (e.g. `Increment — plan: approved, review: file not found`).
+  One uniform badge treatment serves every value: no per-gate color, no
+  progress bar, step-tracker or dot-track — a position is stated, never
+  ranked or judged (constitution §3/§6).
+- **A pipeline section groups every feature by its current gate.** Every
+  bucket — `Spec` through `Released`, plus `Unknown` only if it occurs —
+  renders with the same structural weight whether populated or empty; on
+  this repo's own real history, every feature reads `Released` and every
+  other bucket says so in words, not a blank space.
+- **Zero new git reads.** Every field already exists on the release board's
+  own per-member data; this view is a pure regrouping computed once and
+  never duplicated between the JSON and HTML paths.
+
 ## Project Status
 
 - [x] Package skeleton, `GraphPort` seam to `aspark-graph`, core Fact/Snapshot/
@@ -295,6 +336,11 @@ recomputed a second way.
       delivery-vs-trailing attribution so a feature's scope counts once,
       in its oldest release, and a per-release figures header on each
       card — no health/pass-fail verdict, no trend line, ever (`v0.11.0`)
+- [x] Feature lens — `insights features`, a feature-centric regrouping of
+      the release board: one row per feature (spec date, 5-artifact status,
+      delivered-in tag), a derived current-gate label always paired with
+      its source status, and a pipeline section grouped by gate — zero new
+      git reads, zero health verdicts (`v0.12.0`)
 - [ ] Flow/cycle-time metrics — blocked on `aspark-graph` shipping
       release/commit time data
 - [ ] Architecture-health metrics — blocked on further graph scope hygiene
