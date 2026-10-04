@@ -2,12 +2,13 @@
 
 > **Real, hand-verifiable engineering metrics computed from your repo's actual delivery graph — never a second-guessed number, never a fabricated one.**
 
-> **Project status: shipped at `v0.10.0` — real traceability coverage, a
+> **Project status: shipped at `v0.12.0` — real traceability coverage, a
 > self-contained HTML report, an MCP query tool, honest nulls throughout, a
-> git-native mid-cycle board, and a release board (JSON and a self-contained
+> git-native mid-cycle board, a release board (JSON and a self-contained
 > dark-theme HTML page, newest release first, each feature's own documents
 > viewable in place) that maps every git tag to the SPARK features that
-> shipped in it.**
+> shipped in it, with measured release figures (`v0.11.0`), and a feature
+> lens with one row per feature (`v0.12.0`).**
 > You can build a snapshot today and get real Story→Task, AC→QA and Task→Code
 > coverage numbers, each with its own sample size, computed against
 > [aspark-graph](https://github.com/a-lottes/aSPARK-graph)'s facts, then render
