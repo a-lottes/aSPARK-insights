@@ -353,10 +353,10 @@ uv run insights features --as-of 2026-08-25 --repo /path/to/any/git/repo \
 
 | Product | Status | Responsibility |
 |---|---|---|
-| **[aSPARK Core](https://github.com/a-lottes/aSPARK)** | shipped, `v0.4.0` | Delivery process, roles, gates, templates |
-| **[aspark-graph](https://github.com/a-lottes/aSPARK-graph)** | shipped, `v0.7.0` (on PyPI) | Traceability and engineering knowledge graph |
-| **[aSPARK-policy](https://github.com/a-lottes/aSPARK-policy)** | shipped, `v0.2.0` (format + catalog; enforcement open) | Enterprise engineering standards and governance |
-| **aSPARK-insights** (this repo) | shipped, `v0.8.0` (traceability metrics, HTML report, MCP server, honest nulls, standalone git board, release board) | Engineering metrics and management dashboards |
+| **[aSPARK Core](https://github.com/a-lottes/aSPARK)** | shipped, `v0.14.1` | Delivery process, roles, gates, templates |
+| **[aspark-graph](https://github.com/a-lottes/aSPARK-graph)** | shipped, `v0.7.1` (on PyPI) | Traceability and engineering knowledge graph |
+| **[aSPARK-policy](https://github.com/a-lottes/aSPARK-policy)** | shipped, `v0.3.0` (format + catalog + resolve/validate CLI; enforcement open) | Enterprise engineering standards and governance |
+| **aSPARK-insights** (this repo) | shipped, `v0.12.0` (traceability metrics, HTML report, MCP server, honest nulls, standalone git board, release board with measured figures, feature lens) | Engineering metrics and management dashboards |
 
 The graph delivers fact-queries; insights delivers the analytics product —
 versioned metric definitions, time series over snapshots, joins, dashboards —
