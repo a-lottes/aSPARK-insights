@@ -30,7 +30,7 @@ limits:
 
 tools:
   # These tools run without asking; all others (e.g. Bash) ask at the Leitstand.
-  allow: [Read, Glob, Grep, Edit, Write, TodoWrite]
+  allow: [Read, Glob, Grep, Edit, Write, TodoWrite, "Bash(git:*)"]
 
 dark:                     # mode dark: the line merges on its own when policy, review agent and CI are green
   integration_branch: factory/main    # created from the base; a person merges the release pull request to main
